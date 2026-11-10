@@ -10,7 +10,7 @@ const PORT = 3005;
 const rooms = new Map<string, GameState>();
 const playersInRoom = new Map<string, string[]>();
 const turnTimers = new Map<string, NodeJS.Timeout>();
-const botTimeouts = new Map<string, NodeJS.Timeout>(); // Защита от двойного хода бота
+const botTimeouts = new Map<string, NodeJS.Timeout>();
 const onlineUsers = new Map<string, string>();
 const frozenPlayers = new Map<string, Set<number>>();
 
@@ -144,6 +144,20 @@ async function main() {
 
   const io = new Server(app.server, { cors: { origin: '*' } });
 
+  // 🛡️ ЗАЩИТА: Проверяем JWT токен при подключении сокета
+  io.use((socket, next) => {
+    const token = socket.handshake.auth?.token;
+    if (!token) return next(new Error('Требуется авторизация'));
+    
+    try {
+      const decoded = jwt.verify(token, 'SUPER_SECRET_KEY_123') as any;
+      (socket as any).data = { user: decoded };
+      next();
+    } catch (err) {
+      next(new Error('Неверный токен'));
+    }
+  });
+
   function clearTurnTimer(roomId: string) { 
     if (turnTimers.has(roomId)) { clearTimeout(turnTimers.get(roomId)); turnTimers.delete(roomId); } 
     if (botTimeouts.has(roomId)) { clearTimeout(botTimeouts.get(roomId)); botTimeouts.delete(roomId); }
@@ -153,10 +167,7 @@ async function main() {
     clearTurnTimer(roomId);
     const room = rooms.get(roomId);
     if (!room || room.phase !== 'playing') return;
-    
-    // ИСПРАВЛЕНИЕ: Берем respondent из trick, если есть взятка
     const player = room.trick ? room.trick.respondent : room.currentPlayer;
-    
     const frozen = frozenPlayers.get(roomId);
     if (frozen?.has(player)) return;
 
@@ -267,7 +278,8 @@ async function main() {
   }
 
   function createDevRoom(socket: any): string {
-    const roomId = 'DEV'; const name = 'Vladislav';
+    const roomId = 'DEV'; 
+    const name = socket.data.user.username;
     const initialState: GameState = {
       mode: '1v1', players: [{ id: 0, side: 'A', hand: [], name }, { id: 1, side: 'B', hand: [], name: '🤖 BOT' }],
       deck: [], trumpCard: null, trump: null, trumpChanged: false, trumpChangeEvent: null,
@@ -284,11 +296,13 @@ async function main() {
   }
 
   io.on('connection', (socket) => {
-    socket.on('register_online', (username: string) => { onlineUsers.set(username, socket.id); socket.broadcast.emit('user_status_change', { username, online: true }); });
+    const myName = socket.data.user.username;
+
+    socket.on('register_online', () => { onlineUsers.set(myName, socket.id); socket.broadcast.emit('user_status_change', { username: myName, online: true }); });
+    
     socket.on('disconnect', () => {
-      for (const [username, sockId] of onlineUsers.entries()) {
-        if (sockId === socket.id) { onlineUsers.delete(username); socket.broadcast.emit('user_status_change', { username, online: false }); break; }
-      }
+      onlineUsers.delete(myName);
+      socket.broadcast.emit('user_status_change', { username: myName, online: false });
     });
 
     socket.on('new_friend_request', ({ targetUsername, fromUsername }) => { const targetSocket = onlineUsers.get(targetUsername); if (targetSocket) io.to(targetSocket).emit('friend_request_received', { fromUsername }); });
@@ -296,14 +310,14 @@ async function main() {
     socket.on('accept_invite', ({ from, roomId }) => { const senderSocket = onlineUsers.get(from); if (senderSocket) io.to(senderSocket).emit('invite_accepted', { roomId }); });
 
     socket.on('create_room', (mode: '1v1' | '2v2', dataOrCallback: any, maybeCallback?: any) => {
-      let name = 'Игрок'; let callback = maybeCallback;
-      if (typeof dataOrCallback === 'function') { callback = dataOrCallback; } else if (dataOrCallback && typeof dataOrCallback === 'object') { name = dataOrCallback.name || 'Игрок'; }
+      let callback = maybeCallback;
+      if (typeof dataOrCallback === 'function') { callback = dataOrCallback; }
 
       const roomId = Math.random().toString(36).substring(2, 8);
       const initialState: GameState = {
         mode, players: mode === '1v1' 
-          ? [{ id: 0, side: 'A', hand: [], name }, { id: 1, side: 'B', hand: [], name: 'Ожидание...' }] 
-          : [{ id: 0, side: 'A', hand: [], name }, { id: 1, side: 'B', hand: [], name: 'Ожидание...' }, { id: 2, side: 'A', hand: [], name: 'Ожидание...' }, { id: 3, side: 'B', hand: [], name: 'Ожидание...' }],
+          ? [{ id: 0, side: 'A', hand: [], name: myName }, { id: 1, side: 'B', hand: [], name: 'Ожидание...' }] 
+          : [{ id: 0, side: 'A', hand: [], name: myName }, { id: 1, side: 'B', hand: [], name: 'Ожидание...' }, { id: 2, side: 'A', hand: [], name: 'Ожидание...' }, { id: 3, side: 'B', hand: [], name: 'Ожидание...' }],
         deck: [], trumpCard: null, trump: null, trumpChanged: false, trumpChangeEvent: null,
         currentPlayer: 0, trick: null, lastTrickWinner: null, phase: 'finished', matchScore: { A: 0, B: 0 }, multiplier: 1, roundNumber: 0, bita: { A: [], B: [] }, lastRoundPoints: null, diceRolls: null,
         stateVersion: 0, turnDeadline: null, settled: false
@@ -312,16 +326,16 @@ async function main() {
       if (typeof callback === 'function') callback({ roomId });
     });
 
-    socket.on('create_dev_room', (name: string, callback: any) => { const roomId = createDevRoom(socket); if (typeof callback === 'function') callback({ roomId }); });
+    socket.on('create_dev_room', (callback: any) => { const roomId = createDevRoom(socket); if (typeof callback === 'function') callback({ roomId }); });
 
-    socket.on('join_room', (roomId: string, playerName?: string) => {
+    socket.on('join_room', (roomId: string) => {
       const room = rooms.get(roomId); if (!room) return; socket.join(roomId);
       const players = playersInRoom.get(roomId) || [];
       if (!players.includes(socket.id)) { 
         players.push(socket.id); playersInRoom.set(roomId, players); 
         const newPlayerIdx = players.length - 1;
-        if (playerName && room.players[newPlayerIdx]) room.players[newPlayerIdx].name = playerName;
-        if (playerName === 'Vladislav' && roomId !== 'DEV') io.to(roomId).emit('dev_joined', { name: 'Vladislav' });
+        if (room.players[newPlayerIdx]) room.players[newPlayerIdx].name = myName;
+        if (myName === 'Vladislav' && roomId !== 'DEV') io.to(roomId).emit('dev_joined', { name: 'Vladislav' });
       }
       const maxPlayers = room.mode === '1v1' ? 2 : 4;
       if (players.length === maxPlayers && room.phase === 'finished') rollDiceForRoom(io, roomId);
@@ -335,12 +349,11 @@ async function main() {
       if (res.ok) { rooms.set(roomId, res.state); checkAndBroadcast(io, roomId, res.state); }
     });
 
-    // Чат и DevConsole оставляем без изменений (пропускаем для краткости, они у тебя есть)
-    socket.on('chat_message', ({ roomId, sender, text }) => {
+    socket.on('chat_message', ({ roomId, text }) => {
       const msgId = Math.random().toString(36).substring(7);
       const now = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 
-      if (sender === 'Vladislav' && typeof text === 'string' && text.startsWith('/')) {
+      if (myName === 'Vladislav' && typeof text === 'string' && text.startsWith('/')) {
         const parts = text.trim().split(/\s+/); const cmd = parts[0].toLowerCase(); const arg = parts[1]; const room = rooms.get(roomId);
 
         if (cmd === '/kick' && arg) {
@@ -366,11 +379,11 @@ async function main() {
         if (cmd === '/secret') { io.to(roomId).emit('admin_secret_fx'); io.to(roomId).emit('chat_message', { id: msgId, sender: 'СИСТЕМА', text: '👑 Создатель наблюдает за вами... Удачи, смертные! 🃏', time: now }); return; }
         socket.emit('chat_message', { id: msgId, sender: 'DEBUG', text: `Игровые команды: /kick, /rain, /stats, /reset, /secret. Остальное — в Dev Console (🛠️)`, time: now }); return;
       }
-      io.to(roomId).emit('chat_message', { id: msgId, sender, text, time: now });
+      io.to(roomId).emit('chat_message', { id: msgId, sender: myName, text, time: now });
     });
 
-    socket.on('dev_command', ({ username, command }: { username: string; command: string }) => {
-      if (username !== 'Vladislav') return;
+    socket.on('dev_command', ({ command }: { command: string }) => {
+      if (myName !== 'Vladislav') return;
       const cmd = command.trim(); const parts = cmd.split(/\s+/); const base = parts[0].toLowerCase(); const arg = parts[1];
       const reply = (text: string, type: 'info' | 'error' | 'success' = 'info') => { socket.emit('dev_command_result', { command: cmd, text, type }); };
       const myRoomId = findRoomOfSocket(socket.id); const myRoom = myRoomId ? rooms.get(myRoomId) : null;
@@ -412,7 +425,7 @@ async function main() {
       reply(`❌ Неизвестная команда: ${base}`, 'error'); reply(`Доступные: /gold, /whoami, /freeze [ник], /reverse, /broadcast [текст], /listrooms, /spawnbot`);
     });
 
-    socket.on('send_reaction', ({ roomId, emoji, sender }) => { const left = Math.floor(Math.random() * 80) + 10; io.to(roomId).emit('reaction', { id: Date.now(), emoji, sender, left }); });
+    socket.on('send_reaction', ({ roomId, emoji }) => { const left = Math.floor(Math.random() * 80) + 10; io.to(roomId).emit('reaction', { id: Date.now(), emoji, sender: myName, left }); });
 
     socket.on('play_card', (roomId: string, cards: any[]) => {
       const room = rooms.get(roomId); if (!room || room.phase !== 'playing') return;
@@ -452,14 +465,14 @@ async function main() {
       }
     });
 
-    socket.on('admin_get_rooms', (username: string) => {
-      if (username !== 'Vladislav') return;
+    socket.on('admin_get_rooms', () => {
+      if (myName !== 'Vladislav') return;
       const roomsList = Array.from(rooms.entries()).map(([id, state]) => ({ id, mode: state.mode, phase: state.phase, round: state.roundNumber, players: state.players.map(p => p.name), matchScore: state.matchScore }));
       socket.emit('admin_rooms_list', roomsList);
     });
 
-    socket.on('admin_close_room', (username: string, roomId: string) => {
-      if (username !== 'Vladislav') return;
+    socket.on('admin_close_room', (roomId: string) => {
+      if (myName !== 'Vladislav') return;
       const room = rooms.get(roomId); if (!room) return;
       io.to(roomId).emit('kicked', 'Комната закрыта администратором');
       rooms.delete(roomId); playersInRoom.delete(roomId); frozenPlayers.delete(roomId); clearTurnTimer(roomId);
@@ -470,8 +483,6 @@ async function main() {
 
   function checkAndBroadcast(io: Server, roomId: string, state: GameState) {
     let currentState = state;
-    
-    // Авто-пас для тех, у кого 0 карт
     while (currentState.phase === 'playing' && currentState.trick && currentState.players[currentState.trick.respondent]?.hand.length === 0) {
       const res = applyEvent(currentState, { type: 'PASS', player: currentState.trick.respondent, cards: [] });
       if (!res.ok) break;
@@ -484,8 +495,6 @@ async function main() {
 
     const numPlayers = currentState.mode === '1v1' ? 2 : 4;
     const activePlayers = currentState.players.slice(0, numPlayers);
-
-    // ИСПРАВЛЕНИЕ: Раунд заканчивается, ТОЛЬКО если у ВСЕХ активных игроков 0 карт и колода пуста
     const endOfRound = currentState.deck.length === 0 && currentState.trick === null && activePlayers.every(p => p.hand.length === 0);
 
     if (endOfRound && currentState.phase === 'playing') {
@@ -497,7 +506,6 @@ async function main() {
       rooms.set(roomId, currentState); broadcastState(io, roomId, currentState); 
       if (currentState.phase === 'playing') startTurnTimer(io, roomId); 
       else if (currentState.phase === 'finished') {
-        // ИСПРАВЛЕНИЕ: Статистика пишется только ОДИН раз
         if (!currentState.settled) {
           const users = db.getUsers();
           const p1Name = currentState.players[0]?.name;
@@ -526,8 +534,6 @@ async function main() {
         io.to(sockId).emit('game_state', view);
       }
     });
-    
-    // ИСПРАВЛЕНИЕ: Защита от двойного вызова бота
     if (roomId === 'DEV' && state.phase === 'playing') {
       if (botTimeouts.has(roomId)) clearTimeout(botTimeouts.get(roomId));
       const timeout = setTimeout(() => botMove(io, roomId), 1200);

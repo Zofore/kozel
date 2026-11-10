@@ -9,7 +9,7 @@ import { Friends } from './Friends';
 import { MenuBackground } from './MenuBackground';
 import { DevConsole } from './DevConsole';
 
-const socket: Socket = io('http://localhost:3005');
+const socket: Socket = io('http://localhost:3005', { auth: { token: localStorage.getItem('kozel_token') } });
 const DEV_NAME = 'Vladislav';
 
 const toastStyles = `
@@ -60,7 +60,6 @@ const toastStyles = `
   animation: fadeInScale 0.3s ease-out forwards; width: 320px;
 }
 
-/* Плавающие кнопки разработчика */
 .dev-float-btn {
   position: fixed; right: 20px; width: 50px; height: 50px;
   border-radius: 50%; display: flex; align-items: center; justify-content: center;
@@ -117,19 +116,16 @@ export function App() {
       friendToastTimer.current = setTimeout(() => setFriendRequestToast(null), 5000);
     };
 
-    // DEV-комната создана (переход в игру с ботом)
     const handleDevRoomCreated = ({ roomId }: { roomId: string }) => {
       setRoomId(roomId);
     };
 
-    // Глобальный анонс от Vladislav
     const handleGlobalBroadcast = (data: { text: string, from: string }) => {
       setBroadcastToast(data);
       if (broadcastToastTimer.current) clearTimeout(broadcastToastTimer.current);
       broadcastToastTimer.current = setTimeout(() => setBroadcastToast(null), 7000);
     };
 
-    // Горячая клавиша для Dev Console
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isDev) return;
       if (e.key === '`' || e.key === 'ё' || e.key === 'Ё') {
@@ -199,13 +195,12 @@ export function App() {
     showToast('Профиль обновлен!', 'success');
   };
 
-  // Создание DEV-комнаты через кнопку 🤖
   const handleSpawnBot = () => {
     if (roomId) {
       showToast('Сначала выйди из текущей комнаты', 'error');
       return;
     }
-    socket.emit('create_dev_room', user.username, (res: { roomId: string }) => {
+    socket.emit('create_dev_room', (res: { roomId: string }) => {
       setRoomId(res.roomId);
     });
   };
@@ -214,7 +209,6 @@ export function App() {
 
   let content;
   if (roomId) {
-    // ⬇️ ВОТ ЗДЕСЬ МЫ ПЕРЕДАЕМ openDevConsole В ИГРУ ⬇️
     content = <Game socket={socket} roomId={roomId} setRoomId={setRoomId} username={user.username} openDevConsole={() => setDevConsoleOpen(true)} />;
   }
   else if (view === 'profile') content = <ProfileSettings user={user} onSave={updateProfile} onBack={() => setView('menu')} />;
@@ -257,7 +251,6 @@ export function App() {
           </div>
         )}
 
-        {/* Глобальный анонс */}
         {broadcastToast && (
           <div className="cloud-toast toast-broadcast">
             <div style={{ fontSize: 28 }}>📢</div>
@@ -280,27 +273,13 @@ export function App() {
         {content}
       </div>
 
-      {/* Плавающие кнопки разработчика в меню */}
       {isDev && !roomId && (
         <>
-          <button
-            className="dev-float-btn dev-float-bot"
-            onClick={handleSpawnBot}
-            title="🤖 Игра с ботом"
-          >
-            🤖
-          </button>
-          <button
-            className="dev-float-btn dev-float-console"
-            onClick={() => setDevConsoleOpen(true)}
-            title="🛠️ Dev Console (` тильда)"
-          >
-            🛠️
-          </button>
+          <button className="dev-float-btn dev-float-bot" onClick={handleSpawnBot} title="🤖 Игра с ботом">🤖</button>
+          <button className="dev-float-btn dev-float-console" onClick={() => setDevConsoleOpen(true)} title="🛠️ Dev Console (` тильда)">🛠️</button>
         </>
       )}
 
-      {/* Dev Console */}
       {isDev && devConsoleOpen && (
         <DevConsole socket={socket} username={user.username} onClose={() => setDevConsoleOpen(false)} />
       )}
