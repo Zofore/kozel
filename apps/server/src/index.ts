@@ -10,6 +10,7 @@ const PORT = 3005;
 const rooms = new Map<string, GameState>();
 const playersInRoom = new Map<string, string[]>();
 const turnTimers = new Map<string, NodeJS.Timeout>();
+const botTimeouts = new Map<string, NodeJS.Timeout>(); // Защита от двойного хода бота
 const onlineUsers = new Map<string, string>();
 const frozenPlayers = new Map<string, Set<number>>();
 
@@ -143,39 +144,49 @@ async function main() {
 
   const io = new Server(app.server, { cors: { origin: '*' } });
 
-  function clearTurnTimer(roomId: string) { if (turnTimers.has(roomId)) { clearTimeout(turnTimers.get(roomId)); turnTimers.delete(roomId); } }
+  function clearTurnTimer(roomId: string) { 
+    if (turnTimers.has(roomId)) { clearTimeout(turnTimers.get(roomId)); turnTimers.delete(roomId); } 
+    if (botTimeouts.has(roomId)) { clearTimeout(botTimeouts.get(roomId)); botTimeouts.delete(roomId); }
+  }
 
   function startTurnTimer(io: Server, roomId: string) {
     clearTurnTimer(roomId);
     const room = rooms.get(roomId);
     if (!room || room.phase !== 'playing') return;
-    const player = room.currentPlayer;
+    
+    // ИСПРАВЛЕНИЕ: Берем respondent из trick, если есть взятка
+    const player = room.trick ? room.trick.respondent : room.currentPlayer;
+    
     const frozen = frozenPlayers.get(roomId);
     if (frozen?.has(player)) return;
 
     const timer = setTimeout(() => {
       const currentRoom = rooms.get(roomId);
       if (!currentRoom || currentRoom.phase !== 'playing') return;
-      const player = currentRoom.currentPlayer;
+      const player = currentRoom.trick ? currentRoom.trick.respondent : currentRoom.currentPlayer;
       const hand = currentRoom.players[player]?.hand;
       
       if (!hand || hand.length === 0) {
-        let newState = applyEvent(currentRoom, { type: 'PASS', player: player as any, cards: [] });
-        if (newState !== currentRoom) {
-           if (newState.trick === null && newState.lastTrickWinner !== null) newState = applyEvent(newState, { type: 'DRAW', winner: newState.lastTrickWinner });
-           rooms.set(roomId, newState); checkAndBroadcast(io, roomId, newState);
+        const res = applyEvent(currentRoom, { type: 'PASS', player: player as any, cards: [] });
+        if (res.ok) {
+           let state = res.state;
+           if (state.trick === null && state.lastTrickWinner !== null) {
+             const drawRes = applyEvent(state, { type: 'DRAW', winner: state.lastTrickWinner });
+             if (drawRes.ok) state = drawRes.state;
+           }
+           rooms.set(roomId, state); checkAndBroadcast(io, roomId, state);
         }
         return;
       }
 
       if (currentRoom.trick) {
         const cardToPass = [hand[hand.length - 1]];
-        const newState = applyEvent(currentRoom, { type: 'PASS', player: player as any, cards: cardToPass });
-        if (newState !== currentRoom) { rooms.set(roomId, newState); checkAndBroadcast(io, roomId, newState); }
+        const res = applyEvent(currentRoom, { type: 'PASS', player: player as any, cards: cardToPass });
+        if (res.ok) { rooms.set(roomId, res.state); checkAndBroadcast(io, roomId, res.state); }
       } else {
         const cardToAttack = [hand[hand.length - 1]];
-        const newState = applyEvent(currentRoom, { type: 'ATTACK', player: player as any, cards: cardToAttack });
-        if (newState !== currentRoom) { rooms.set(roomId, newState); checkAndBroadcast(io, roomId, newState); }
+        const res = applyEvent(currentRoom, { type: 'ATTACK', player: player as any, cards: cardToAttack });
+        if (res.ok) { rooms.set(roomId, res.state); checkAndBroadcast(io, roomId, res.state); }
       }
     }, 30000);
     turnTimers.set(roomId, timer);
@@ -198,8 +209,8 @@ async function main() {
       const currentRoom = rooms.get(roomId); if (!currentRoom) return;
       if (winners.length === 1) {
         const winnerId = winners[0];
-        const gameState = applyEvent(currentRoom, { type: 'START_ROUND', firstPlayer: winnerId });
-        rooms.set(roomId, gameState); checkAndBroadcast(io, roomId, gameState);
+        const res = applyEvent(currentRoom, { type: 'START_ROUND', firstPlayer: winnerId });
+        if (res.ok) { rooms.set(roomId, res.state); checkAndBroadcast(io, roomId, res.state); }
       } else { rollDiceForRoom(io, roomId); }
     }, 4000);
   }
@@ -212,8 +223,8 @@ async function main() {
     try {
       if (!room.trick && room.currentPlayer === botId) {
         const card = bot.hand[0];
-        const newState = applyEvent(room, { type: 'ATTACK', player: botId, cards: [card] });
-        if (newState !== room) { rooms.set(roomId, newState); checkAndBroadcast(io, roomId, newState); }
+        const res = applyEvent(room, { type: 'ATTACK', player: botId, cards: [card] });
+        if (res.ok) { rooms.set(roomId, res.state); checkAndBroadcast(io, roomId, res.state); }
         return;
       }
 
@@ -237,27 +248,22 @@ async function main() {
         }
 
         if (beatCards) {
-          const newState = applyEvent(room, { type: 'BEAT', player: botId, cards: beatCards });
-          if (newState !== room) { rooms.set(roomId, newState); checkAndBroadcast(io, roomId, newState); return; }
+          const res = applyEvent(room, { type: 'BEAT', player: botId, cards: beatCards });
+          if (res.ok) { rooms.set(roomId, res.state); checkAndBroadcast(io, roomId, res.state); return; }
         }
         
-        let newState = applyEvent(room, { type: 'PASS', player: botId, cards: [] });
-        if (newState !== room) {
-          if (newState.trick === null && newState.lastTrickWinner !== null) newState = applyEvent(newState, { type: 'DRAW', winner: newState.lastTrickWinner });
-          rooms.set(roomId, newState); checkAndBroadcast(io, roomId, newState);
+        const res = applyEvent(room, { type: 'PASS', player: botId, cards: [] });
+        if (res.ok) {
+          let state = res.state;
+          if (state.trick === null && state.lastTrickWinner !== null) {
+            const drawRes = applyEvent(state, { type: 'DRAW', winner: state.lastTrickWinner });
+            if (drawRes.ok) state = drawRes.state;
+          }
+          rooms.set(roomId, state); checkAndBroadcast(io, roomId, state);
         }
         return;
       }
-    } catch (e) {
-      console.error('Bot exception', e);
-      try {
-        let newState = applyEvent(room, { type: 'PASS', player: botId, cards: [] });
-        if (newState !== room) {
-          if (newState.trick === null && newState.lastTrickWinner !== null) newState = applyEvent(newState, { type: 'DRAW', winner: newState.lastTrickWinner });
-          rooms.set(roomId, newState); checkAndBroadcast(io, roomId, newState);
-        }
-      } catch (err) {}
-    }
+    } catch (e) { console.error('Bot exception', e); }
   }
 
   function createDevRoom(socket: any): string {
@@ -267,7 +273,7 @@ async function main() {
       deck: [], trumpCard: null, trump: null, trumpChanged: false, trumpChangeEvent: null,
       currentPlayer: 0, trick: null, lastTrickWinner: null, phase: 'finished',
       matchScore: { A: 0, B: 0 }, multiplier: 1, roundNumber: 0, bita: { A: [], B: [] }, lastRoundPoints: null, diceRolls: null,
-      stateVersion: 0, turnDeadline: null
+      stateVersion: 0, turnDeadline: null, settled: false
     };
     rooms.set(roomId, initialState); playersInRoom.set(roomId, [socket.id, '__BOT__']); socket.join(roomId); return roomId;
   }
@@ -300,7 +306,7 @@ async function main() {
           : [{ id: 0, side: 'A', hand: [], name }, { id: 1, side: 'B', hand: [], name: 'Ожидание...' }, { id: 2, side: 'A', hand: [], name: 'Ожидание...' }, { id: 3, side: 'B', hand: [], name: 'Ожидание...' }],
         deck: [], trumpCard: null, trump: null, trumpChanged: false, trumpChangeEvent: null,
         currentPlayer: 0, trick: null, lastTrickWinner: null, phase: 'finished', matchScore: { A: 0, B: 0 }, multiplier: 1, roundNumber: 0, bita: { A: [], B: [] }, lastRoundPoints: null, diceRolls: null,
-        stateVersion: 0, turnDeadline: null
+        stateVersion: 0, turnDeadline: null, settled: false
       };
       rooms.set(roomId, initialState); playersInRoom.set(roomId, []); socket.join(roomId); 
       if (typeof callback === 'function') callback({ roomId });
@@ -325,10 +331,11 @@ async function main() {
     socket.on('next_round', (roomId: string) => {
       const room = rooms.get(roomId); if (!room || room.phase !== 'round-scored') return;
       const cleanState = { ...room, bita: { A: [], B: [] }, trumpChanged: false, diceRolls: null };
-      const newState = applyEvent(cleanState, { type: 'START_ROUND', firstPlayer: room.lastTrickWinner ?? 0 });
-      rooms.set(roomId, newState); checkAndBroadcast(io, roomId, newState);
+      const res = applyEvent(cleanState, { type: 'START_ROUND', firstPlayer: room.lastTrickWinner ?? 0 });
+      if (res.ok) { rooms.set(roomId, res.state); checkAndBroadcast(io, roomId, res.state); }
     });
 
+    // Чат и DevConsole оставляем без изменений (пропускаем для краткости, они у тебя есть)
     socket.on('chat_message', ({ roomId, sender, text }) => {
       const msgId = Math.random().toString(36).substring(7);
       const now = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
@@ -352,8 +359,9 @@ async function main() {
         }
         if (cmd === '/reset') {
           if (!room) return; const cleanState = { ...room, bita: { A: [], B: [] }, trumpChanged: false, diceRolls: null };
-          const newState = applyEvent(cleanState, { type: 'START_ROUND', firstPlayer: room.lastTrickWinner ?? 0 });
-          rooms.set(roomId, newState); checkAndBroadcast(io, roomId, newState); io.to(roomId).emit('chat_message', { id: msgId, sender: 'СИСТЕМА', text: '🔄 Кон перезапущен администратором', time: now }); return;
+          const res = applyEvent(cleanState, { type: 'START_ROUND', firstPlayer: room.lastTrickWinner ?? 0 });
+          if (res.ok) { rooms.set(roomId, res.state); checkAndBroadcast(io, roomId, res.state); }
+          io.to(roomId).emit('chat_message', { id: msgId, sender: 'СИСТЕМА', text: '🔄 Кон перезапущен администратором', time: now }); return;
         }
         if (cmd === '/secret') { io.to(roomId).emit('admin_secret_fx'); io.to(roomId).emit('chat_message', { id: msgId, sender: 'СИСТЕМА', text: '👑 Создатель наблюдает за вами... Удачи, смертные! 🃏', time: now }); return; }
         socket.emit('chat_message', { id: msgId, sender: 'DEBUG', text: `Игровые команды: /kick, /rain, /stats, /reset, /secret. Остальное — в Dev Console (🛠️)`, time: now }); return;
@@ -410,43 +418,38 @@ async function main() {
       const room = rooms.get(roomId); if (!room || room.phase !== 'playing') return;
       const playerIndex = playersInRoom.get(roomId)?.indexOf(socket.id) ?? -1; if (playerIndex === -1) return;
       
-      if (room.currentPlayer !== playerIndex || room.trick) return; // Только первая атака здесь
-
       const opponentIdx = (playerIndex + 1) % (room.mode === '1v1' ? 2 : 4);
       const opponentHandSize = room.players[opponentIdx].hand.length;
       if (opponentHandSize > 0 && cards.length > opponentHandSize) { socket.emit('error', 'Нельзя ходить картами больше, чем есть у соперника!'); return; }
       
-      const hand = room.players[playerIndex].hand;
-      const hasAllCards = cards.every(c => hand.some(h => h.suit === c.suit && h.rank === c.rank));
-      if (!hasAllCards) { socket.emit('error', 'У тебя нет таких карт!'); return; }
-
       const isSpecial = validateSpecial(cards, room.trump!);
       if (!isSpecial && cards.length > 1) { 
         const suit = cards[0].suit; if (!cards.every(c => c.suit === suit)) { socket.emit('error', 'Ходить можно только картами одной масти!'); return; } 
       }
       
-      const newState = applyEvent(room, { type: 'ATTACK', player: playerIndex as any, cards });
-      rooms.set(roomId, newState); checkAndBroadcast(io, roomId, newState);
+      const res = applyEvent(room, { type: 'ATTACK', player: playerIndex as any, cards });
+      if (res.ok) { rooms.set(roomId, res.state); checkAndBroadcast(io, roomId, res.state); }
+      else { socket.emit('error', `Ошибка: ${res.error}`); }
     });
 
     socket.on('pass_or_beat', (roomId: string, action: 'beat' | 'pass', cards: any[]) => {
       const room = rooms.get(roomId); if (!room || room.phase !== 'playing') return;
       const playerIndex = playersInRoom.get(roomId)?.indexOf(socket.id) ?? -1; if (playerIndex === -1) return;
       
-      if (room.currentPlayer !== playerIndex || !room.trick) return;
-
-      try {
-        let newState = room;
-        if (action === 'beat') {
-          if (!canBeat(cards, room.trick.topCards, room.trump!)) { socket.emit('error', 'Эти карты не бьют!'); return; }
-          newState = applyEvent(room, { type: 'BEAT', player: playerIndex as any, cards });
-        } else { newState = applyEvent(room, { type: 'PASS', player: playerIndex as any, cards }); }
+      const res = action === 'beat' 
+        ? applyEvent(room, { type: 'BEAT', player: playerIndex as any, cards })
+        : applyEvent(room, { type: 'PASS', player: playerIndex as any, cards });
         
-        if (newState.trick === null && newState.lastTrickWinner !== null) {
-          const drawnState = applyEvent(newState, { type: 'DRAW', winner: newState.lastTrickWinner });
-          rooms.set(roomId, drawnState); checkAndBroadcast(io, roomId, drawnState);
-        } else { rooms.set(roomId, newState); checkAndBroadcast(io, roomId, newState); }
-      } catch (e: any) { socket.emit('error', e.message); }
+      if (res.ok) {
+        let state = res.state;
+        if (state.trick === null && state.lastTrickWinner !== null) {
+          const drawRes = applyEvent(state, { type: 'DRAW', winner: state.lastTrickWinner });
+          if (drawRes.ok) state = drawRes.state;
+        }
+        rooms.set(roomId, state); checkAndBroadcast(io, roomId, state);
+      } else {
+        socket.emit('error', `Ошибка: ${res.error}`);
+      }
     });
 
     socket.on('admin_get_rooms', (username: string) => {
@@ -468,28 +471,46 @@ async function main() {
   function checkAndBroadcast(io: Server, roomId: string, state: GameState) {
     let currentState = state;
     
-    // АВТО-ПАС: Если у игрока, чей сейчас ход, закончились карты, он не может ходить. Автоматически засчитываем "Биту".
-    while (currentState.phase === 'playing' && currentState.trick && currentState.players[currentState.currentPlayer]?.hand.length === 0) {
-      let nextState = applyEvent(currentState, { type: 'PASS', player: currentState.currentPlayer, cards: [] });
-      if (nextState.trick === null && nextState.lastTrickWinner !== null) nextState = applyEvent(nextState, { type: 'DRAW', winner: nextState.lastTrickWinner });
-      if (nextState === currentState) break; // Защита от зависания
-      currentState = nextState;
+    // Авто-пас для тех, у кого 0 карт
+    while (currentState.phase === 'playing' && currentState.trick && currentState.players[currentState.trick.respondent]?.hand.length === 0) {
+      const res = applyEvent(currentState, { type: 'PASS', player: currentState.trick.respondent, cards: [] });
+      if (!res.ok) break;
+      currentState = res.state;
+      if (currentState.trick === null && currentState.lastTrickWinner !== null) {
+        const drawRes = applyEvent(currentState, { type: 'DRAW', winner: currentState.lastTrickWinner });
+        if (drawRes.ok) currentState = drawRes.state;
+      }
     }
 
-    const someoneHasNoCards = currentState.players.some(p => p.hand.length === 0);
-    if (currentState.deck.length === 0 && currentState.trick === null && someoneHasNoCards && currentState.phase === 'playing') {
-      const scored = applyEvent(currentState, { type: 'SCORE_ROUND' });
-      rooms.set(roomId, scored); broadcastState(io, roomId, scored); clearTurnTimer(roomId);
+    const numPlayers = currentState.mode === '1v1' ? 2 : 4;
+    const activePlayers = currentState.players.slice(0, numPlayers);
+
+    // ИСПРАВЛЕНИЕ: Раунд заканчивается, ТОЛЬКО если у ВСЕХ активных игроков 0 карт и колода пуста
+    const endOfRound = currentState.deck.length === 0 && currentState.trick === null && activePlayers.every(p => p.hand.length === 0);
+
+    if (endOfRound && currentState.phase === 'playing') {
+      const res = applyEvent(currentState, { type: 'SCORE_ROUND' });
+      if (res.ok) {
+        rooms.set(roomId, res.state); broadcastState(io, roomId, res.state); clearTurnTimer(roomId);
+      }
     } else { 
       rooms.set(roomId, currentState); broadcastState(io, roomId, currentState); 
       if (currentState.phase === 'playing') startTurnTimer(io, roomId); 
       else if (currentState.phase === 'finished') {
-        const users = db.getUsers(); const p1Name = currentState.players[0]?.name; const p2Name = currentState.players[1]?.name;
-        const p1 = users.find(u => u.username === p1Name); const p2 = users.find(u => u.username === p2Name);
-        if (p1 && p2) {
-          if (currentState.matchScore.A >= 24) { p2.wins = (p2.wins || 0) + 1; p1.losses = (p1.losses || 0) + 1; }
-          else if (currentState.matchScore.B >= 24) { p1.wins = (p1.wins || 0) + 1; p2.losses = (p2.losses || 0) + 1; }
-          db.saveUsers(users);
+        // ИСПРАВЛЕНИЕ: Статистика пишется только ОДИН раз
+        if (!currentState.settled) {
+          const users = db.getUsers();
+          const p1Name = currentState.players[0]?.name;
+          const p2Name = currentState.players[1]?.name;
+          const p1 = users.find(u => u.username === p1Name);
+          const p2 = users.find(u => u.username === p2Name);
+          if (p1 && p2) {
+            if (currentState.matchScore.A >= 24) { p2.wins = (p2.wins || 0) + 1; p1.losses = (p1.losses || 0) + 1; }
+            else if (currentState.matchScore.B >= 24) { p1.wins = (p1.wins || 0) + 1; p2.losses = (p2.losses || 0) + 1; }
+            db.saveUsers(users);
+          }
+          currentState.settled = true;
+          rooms.set(roomId, currentState);
         }
         clearTurnTimer(roomId);
       } else clearTurnTimer(roomId);
@@ -505,7 +526,13 @@ async function main() {
         io.to(sockId).emit('game_state', view);
       }
     });
-    if (roomId === 'DEV' && state.phase === 'playing') setTimeout(() => botMove(io, roomId), 1200);
+    
+    // ИСПРАВЛЕНИЕ: Защита от двойного вызова бота
+    if (roomId === 'DEV' && state.phase === 'playing') {
+      if (botTimeouts.has(roomId)) clearTimeout(botTimeouts.get(roomId));
+      const timeout = setTimeout(() => botMove(io, roomId), 1200);
+      botTimeouts.set(roomId, timeout);
+    }
   }
 }
 

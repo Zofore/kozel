@@ -18,8 +18,8 @@ export interface TrickState {
   topCards: Card[];
   topPlayer: PlayerId;
   cardsOnTable: Card[];
-  respondent: PlayerId; // Кто должен ответить
-  required: number;     // Сколько карт нужно положить
+  respondent: PlayerId;
+  required: number;
 }
 
 export interface GameState {
@@ -40,9 +40,9 @@ export interface GameState {
   bita: Record<Side, Card[]>;
   lastRoundPoints: Record<Side, number> | null;
   diceRolls: Partial<Record<PlayerId, number>> | null;
-  // Новые поля для синхронизации
   stateVersion: number;
   turnDeadline: number | null;
+  settled?: boolean; // <--- НОВОЕ: защита от накрутки статистики
 }
 
 // --- ТО, ЧТО ВИДИТ КЛИЕНТ ---
@@ -57,9 +57,9 @@ export interface PublicPlayer {
 export interface PlayerView {
   mode: GameState['mode'];
   me: PlayerId;
-  hand: Card[];              // Только свои карты
-  players: PublicPlayer[];   // У остальных — только счётчик
-  deckCount: number;         // Не сам deck
+  hand: Card[];
+  players: PublicPlayer[];
+  deckCount: number;
   trumpCard: Card | null;
   trump: Suit | null;
   trumpChanged: boolean;
@@ -71,10 +71,10 @@ export interface PlayerView {
   matchScore: Record<Side, number>;
   multiplier: number;
   roundNumber: number;
-  bitaCount: Record<Side, number>; // Только количество карт в бите
+  bitaCount: Record<Side, number>;
   lastRoundPoints: Record<Side, number> | null;
   diceRolls: Partial<Record<PlayerId, number>> | null;
-  legalMoves: string[][];    // Подсказки ходов (строки карт)
+  legalMoves: string[][];
   stateVersion: number;
   turnDeadline: number | null;
 }
