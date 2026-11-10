@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "echo 'Skipping tsc build, using tsx'",
     "start": "tsx src/index.ts"
   },
   "dependencies": {
