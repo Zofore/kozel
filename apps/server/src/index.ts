@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import { Server } from 'socket.io';
-import { applyEvent, GameState, canBeat, validateSpecial, project, getLegalMoves, PlayerId } from '@kozel/game-core';
+import { applyEvent, GameState, canBeat, validateSpecial, project, getLegalMoves, PlayerId, RANK_VALUE } from '@kozel/game-core';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { db } from './db';
@@ -35,20 +35,23 @@ async function main() {
     if (!REGEX_FULLNAME.test(fullname)) return reply.code(400).send({ error: 'ФИО некорректно' });
     if (!REGEX_EMAIL.test(email)) return reply.code(400).send({ error: 'Некорректный Email' });
 
-    const users = db.getUsers();
+    const users = await db.getUsers();
     if (users.find(u => u.username.toLowerCase() === username.toLowerCase())) return reply.code(400).send({ error: 'Этот никнейм уже занят' });
 
     try {
       const hash = await bcrypt.hash(password, 10);
-      users.push({ id: users.length + 1, username, password: hash, fullname, email, avatar: '', status: 'В сети', friends: [], friendRequests: [], wins: 0, losses: 0 });
-      db.saveUsers(users);
+      // Находим максимальный ID, чтобы не сломать последовательность при удалении
+      const newId = users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1;
+      
+      users.push({ id: newId, username, password: hash, fullname, email, avatar: '', status: 'В сети', friends: [], friendRequests: [], wins: 0, losses: 0 });
+      await db.saveUsers(users);
       return { success: true };
     } catch (e) { return reply.code(500).send({ error: 'Ошибка сервера' }); }
   });
 
   app.post('/api/login', async (req, reply) => {
     const { username, password } = req.body as any;
-    const users = db.getUsers();
+    const users = await db.getUsers();
     const user = users.find(u => u.username.toLowerCase() === username.toLowerCase());
     if (!user) return reply.code(400).send({ error: 'Неверный логин или пароль' });
     const isValid = await bcrypt.compare(password, user.password);
@@ -59,12 +62,12 @@ async function main() {
 
   app.post('/api/user/update', async (req, reply) => {
     const { username, status, avatar } = req.body as any;
-    const users = db.getUsers();
+    const users = await db.getUsers();
     const userIndex = users.findIndex(u => u.username === username);
     if (userIndex === -1) return reply.code(404).send({ error: 'Пользователь не найден' });
     if (status !== undefined) users[userIndex].status = status;
     if (avatar !== undefined) users[userIndex].avatar = avatar;
-    db.saveUsers(users);
+    await db.saveUsers(users);
     return { success: true };
   });
 
@@ -74,7 +77,7 @@ async function main() {
     if (!q || typeof q !== 'string') return { users: [] };
     const searchString = q.replace(/@/g, '').trim().toLowerCase();
     if (!searchString) return { users: [] };
-    const users = db.getUsers();
+    const users = await db.getUsers();
     const results = users.filter(u => u.username.toLowerCase().includes(searchString)).map(u => ({
       username: u.username, fullname: u.fullname, avatar: u.avatar, status: u.status, online: onlineUsers.has(u.username), wins: u.wins || 0, losses: u.losses || 0
     }));
@@ -83,20 +86,20 @@ async function main() {
 
   app.post('/api/friends/request', async (req, reply) => {
     const { username, targetUsername } = req.body as any;
-    const users = db.getUsers();
+    const users = await db.getUsers();
     const user = users.find(u => u.username === username);
     const target = users.find(u => u.username === targetUsername);
     if (!user || !target) return reply.code(404).send({ error: 'Пользователь не найден' });
     if (user.username === target.username) return reply.code(400).send({ error: 'Нельзя добавить себя' });
     if (user.friends?.includes(targetUsername)) return reply.code(400).send({ error: 'Уже в друзьях' });
     if (!target.friendRequests) target.friendRequests = [];
-    if (!target.friendRequests.includes(username)) { target.friendRequests.push(username); db.saveUsers(users); }
+    if (!target.friendRequests.includes(username)) { target.friendRequests.push(username); await db.saveUsers(users); }
     return { success: true };
   });
 
   app.post('/api/friends/respond', async (req, reply) => {
     const { username, requesterUsername, action } = req.body as any;
-    const users = db.getUsers();
+    const users = await db.getUsers();
     const user = users.find(u => u.username === username);
     const requester = users.find(u => u.username === requesterUsername);
     if (!user || !requester) return reply.code(404).send({ error: 'Пользователь не найден' });
@@ -107,25 +110,25 @@ async function main() {
       if (!user.friends.includes(requesterUsername)) user.friends.push(requesterUsername);
       if (!requester.friends.includes(username)) requester.friends.push(username);
     }
-    db.saveUsers(users);
+    await db.saveUsers(users);
     return { success: true };
   });
 
   app.post('/api/friends/remove', async (req, reply) => {
     const { username, friendUsername } = req.body as any;
-    const users = db.getUsers();
+    const users = await db.getUsers();
     const user = users.find(u => u.username === username);
     const friend = users.find(u => u.username === friendUsername);
     if (!user || !friend) return reply.code(404).send({ error: 'Пользователь не найден' });
     if (user.friends) user.friends = user.friends.filter((f: string) => f !== friendUsername);
     if (friend.friends) friend.friends = friend.friends.filter((f: string) => f !== username);
-    db.saveUsers(users);
+    await db.saveUsers(users);
     return { success: true };
   });
 
   app.get('/api/friends/list/:username', async (req, reply) => {
     const { username } = req.params as any;
-    const users = db.getUsers();
+    const users = await db.getUsers();
     const user = users.find(u => u.username === username);
     if (!user) return reply.code(404).send({ error: 'Пользователь не найден' });
     const friendsList = (user.friends || []).map((fName: string) => {
@@ -144,7 +147,6 @@ async function main() {
 
   const io = new Server(app.server, { cors: { origin: '*' } });
 
-  // 🛡️ ЗАЩИТА: Проверяем JWT токен при подключении сокета
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token;
     if (!token) return next(new Error('Требуется авторизация'));
@@ -171,7 +173,7 @@ async function main() {
     const frozen = frozenPlayers.get(roomId);
     if (frozen?.has(player)) return;
 
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       const currentRoom = rooms.get(roomId);
       if (!currentRoom || currentRoom.phase !== 'playing') return;
       const player = currentRoom.trick ? currentRoom.trick.respondent : currentRoom.currentPlayer;
@@ -185,7 +187,7 @@ async function main() {
              const drawRes = applyEvent(state, { type: 'DRAW', winner: state.lastTrickWinner });
              if (drawRes.ok) state = drawRes.state;
            }
-           rooms.set(roomId, state); checkAndBroadcast(io, roomId, state);
+           rooms.set(roomId, state); await checkAndBroadcast(io, roomId, state);
         }
         return;
       }
@@ -193,11 +195,11 @@ async function main() {
       if (currentRoom.trick) {
         const cardToPass = [hand[hand.length - 1]];
         const res = applyEvent(currentRoom, { type: 'PASS', player: player as any, cards: cardToPass });
-        if (res.ok) { rooms.set(roomId, res.state); checkAndBroadcast(io, roomId, res.state); }
+        if (res.ok) { rooms.set(roomId, res.state); await checkAndBroadcast(io, roomId, res.state); }
       } else {
         const cardToAttack = [hand[hand.length - 1]];
         const res = applyEvent(currentRoom, { type: 'ATTACK', player: player as any, cards: cardToAttack });
-        if (res.ok) { rooms.set(roomId, res.state); checkAndBroadcast(io, roomId, res.state); }
+        if (res.ok) { rooms.set(roomId, res.state); await checkAndBroadcast(io, roomId, res.state); }
       }
     }, 30000);
     turnTimers.set(roomId, timer);
@@ -216,17 +218,18 @@ async function main() {
     const newState = { ...room, phase: 'dice-roll' as const, diceRolls: rolls, stateVersion: (room.stateVersion || 0) + 1 };
     rooms.set(roomId, newState); broadcastState(io, roomId, newState);
 
-    setTimeout(() => {
+    setTimeout(async () => {
       const currentRoom = rooms.get(roomId); if (!currentRoom) return;
       if (winners.length === 1) {
         const winnerId = winners[0];
-        const res = applyEvent(currentRoom, { type: 'START_ROUND', firstPlayer: winnerId });
-        if (res.ok) { rooms.set(roomId, res.state); checkAndBroadcast(io, roomId, res.state); }
+        const seed = Math.floor(Math.random() * 1000000);
+        const res = applyEvent(currentRoom, { type: 'START_ROUND', firstPlayer: winnerId, seed });
+        if (res.ok) { rooms.set(roomId, res.state); await checkAndBroadcast(io, roomId, res.state); }
       } else { rollDiceForRoom(io, roomId); }
     }, 4000);
   }
 
-  function botMove(io: Server, roomId: string) {
+  async function botMove(io: Server, roomId: string) {
     const room = rooms.get(roomId); if (!room || room.phase !== 'playing') return;
     if (room.mode !== '1v1') return;
     const botId = 1; const bot = room.players[botId]; if (!bot) return;
@@ -235,14 +238,13 @@ async function main() {
       if (!room.trick && room.currentPlayer === botId) {
         const card = bot.hand[0];
         const res = applyEvent(room, { type: 'ATTACK', player: botId, cards: [card] });
-        if (res.ok) { rooms.set(roomId, res.state); checkAndBroadcast(io, roomId, res.state); }
+        if (res.ok) { rooms.set(roomId, res.state); await checkAndBroadcast(io, roomId, res.state); }
         return;
       }
 
       if (room.trick && room.trick.respondent === botId) {
         const required = room.trick.required; const top = room.trick.topCards;
-        const rankVal = (r: string) => ({ '6':1, '7':2, '8':3, '9':4, 'J':5, 'Q':6, 'K':7, '10':8, 'A':9 }[r] || 0);
-        const sortedHand = [...bot.hand].sort((a, b) => rankVal(a.rank) - rankVal(b.rank));
+        const sortedHand = [...bot.hand].sort((a, b) => RANK_VALUE[a.rank] - RANK_VALUE[b.rank]);
         
         let beatCards: any[] | null = null;
         const targetSuit = top[0].suit; const sameSuit = sortedHand.filter(c => c.suit === targetSuit);
@@ -260,7 +262,7 @@ async function main() {
 
         if (beatCards) {
           const res = applyEvent(room, { type: 'BEAT', player: botId, cards: beatCards });
-          if (res.ok) { rooms.set(roomId, res.state); checkAndBroadcast(io, roomId, res.state); return; }
+          if (res.ok) { rooms.set(roomId, res.state); await checkAndBroadcast(io, roomId, res.state); return; }
         }
         
         const res = applyEvent(room, { type: 'PASS', player: botId, cards: [] });
@@ -270,7 +272,7 @@ async function main() {
             const drawRes = applyEvent(state, { type: 'DRAW', winner: state.lastTrickWinner });
             if (drawRes.ok) state = drawRes.state;
           }
-          rooms.set(roomId, state); checkAndBroadcast(io, roomId, state);
+          rooms.set(roomId, state); await checkAndBroadcast(io, roomId, state);
         }
         return;
       }
@@ -342,11 +344,12 @@ async function main() {
       else broadcastState(io, roomId, room);
     });
 
-    socket.on('next_round', (roomId: string) => {
+    socket.on('next_round', async (roomId: string) => {
       const room = rooms.get(roomId); if (!room || room.phase !== 'round-scored') return;
       const cleanState = { ...room, bita: { A: [], B: [] }, trumpChanged: false, diceRolls: null };
-      const res = applyEvent(cleanState, { type: 'START_ROUND', firstPlayer: room.lastTrickWinner ?? 0 });
-      if (res.ok) { rooms.set(roomId, res.state); checkAndBroadcast(io, roomId, res.state); }
+      const seed = Math.floor(Math.random() * 1000000);
+      const res = applyEvent(cleanState, { type: 'START_ROUND', firstPlayer: room.lastTrickWinner ?? 0, seed });
+      if (res.ok) { rooms.set(roomId, res.state); await checkAndBroadcast(io, roomId, res.state); }
     });
 
     socket.on('chat_message', ({ roomId, text }) => {
@@ -372,7 +375,8 @@ async function main() {
         }
         if (cmd === '/reset') {
           if (!room) return; const cleanState = { ...room, bita: { A: [], B: [] }, trumpChanged: false, diceRolls: null };
-          const res = applyEvent(cleanState, { type: 'START_ROUND', firstPlayer: room.lastTrickWinner ?? 0 });
+          const seed = Math.floor(Math.random() * 1000000);
+          const res = applyEvent(cleanState, { type: 'START_ROUND', firstPlayer: room.lastTrickWinner ?? 0, seed });
           if (res.ok) { rooms.set(roomId, res.state); checkAndBroadcast(io, roomId, res.state); }
           io.to(roomId).emit('chat_message', { id: msgId, sender: 'СИСТЕМА', text: '🔄 Кон перезапущен администратором', time: now }); return;
         }
@@ -427,7 +431,7 @@ async function main() {
 
     socket.on('send_reaction', ({ roomId, emoji }) => { const left = Math.floor(Math.random() * 80) + 10; io.to(roomId).emit('reaction', { id: Date.now(), emoji, sender: myName, left }); });
 
-    socket.on('play_card', (roomId: string, cards: any[]) => {
+    socket.on('play_card', async (roomId: string, cards: any[]) => {
       const room = rooms.get(roomId); if (!room || room.phase !== 'playing') return;
       const playerIndex = playersInRoom.get(roomId)?.indexOf(socket.id) ?? -1; if (playerIndex === -1) return;
       
@@ -441,11 +445,11 @@ async function main() {
       }
       
       const res = applyEvent(room, { type: 'ATTACK', player: playerIndex as any, cards });
-      if (res.ok) { rooms.set(roomId, res.state); checkAndBroadcast(io, roomId, res.state); }
+      if (res.ok) { rooms.set(roomId, res.state); await checkAndBroadcast(io, roomId, res.state); }
       else { socket.emit('error', `Ошибка: ${res.error}`); }
     });
 
-    socket.on('pass_or_beat', (roomId: string, action: 'beat' | 'pass', cards: any[]) => {
+    socket.on('pass_or_beat', async (roomId: string, action: 'beat' | 'pass', cards: any[]) => {
       const room = rooms.get(roomId); if (!room || room.phase !== 'playing') return;
       const playerIndex = playersInRoom.get(roomId)?.indexOf(socket.id) ?? -1; if (playerIndex === -1) return;
       
@@ -459,19 +463,19 @@ async function main() {
           const drawRes = applyEvent(state, { type: 'DRAW', winner: state.lastTrickWinner });
           if (drawRes.ok) state = drawRes.state;
         }
-        rooms.set(roomId, state); checkAndBroadcast(io, roomId, state);
+        rooms.set(roomId, state); await checkAndBroadcast(io, roomId, state);
       } else {
         socket.emit('error', `Ошибка: ${res.error}`);
       }
     });
 
-    socket.on('admin_get_rooms', () => {
+    socket.on('admin_get_rooms', async () => {
       if (myName !== 'Vladislav') return;
       const roomsList = Array.from(rooms.entries()).map(([id, state]) => ({ id, mode: state.mode, phase: state.phase, round: state.roundNumber, players: state.players.map(p => p.name), matchScore: state.matchScore }));
       socket.emit('admin_rooms_list', roomsList);
     });
 
-    socket.on('admin_close_room', (roomId: string) => {
+    socket.on('admin_close_room', async (roomId: string) => {
       if (myName !== 'Vladislav') return;
       const room = rooms.get(roomId); if (!room) return;
       io.to(roomId).emit('kicked', 'Комната закрыта администратором');
@@ -481,7 +485,7 @@ async function main() {
     });
   });
 
-  function checkAndBroadcast(io: Server, roomId: string, state: GameState) {
+  async function checkAndBroadcast(io: Server, roomId: string, state: GameState) {
     let currentState = state;
     while (currentState.phase === 'playing' && currentState.trick && currentState.players[currentState.trick.respondent]?.hand.length === 0) {
       const res = applyEvent(currentState, { type: 'PASS', player: currentState.trick.respondent, cards: [] });
@@ -507,7 +511,7 @@ async function main() {
       if (currentState.phase === 'playing') startTurnTimer(io, roomId); 
       else if (currentState.phase === 'finished') {
         if (!currentState.settled) {
-          const users = db.getUsers();
+          const users = await db.getUsers();
           const p1Name = currentState.players[0]?.name;
           const p2Name = currentState.players[1]?.name;
           const p1 = users.find(u => u.username === p1Name);
@@ -515,7 +519,7 @@ async function main() {
           if (p1 && p2) {
             if (currentState.matchScore.A >= 24) { p2.wins = (p2.wins || 0) + 1; p1.losses = (p1.losses || 0) + 1; }
             else if (currentState.matchScore.B >= 24) { p1.wins = (p1.wins || 0) + 1; p2.losses = (p2.losses || 0) + 1; }
-            db.saveUsers(users);
+            await db.saveUsers(users);
           }
           currentState.settled = true;
           rooms.set(roomId, currentState);

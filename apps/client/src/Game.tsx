@@ -5,6 +5,20 @@ const DEV_NAME = 'Vladislav';
 const SUIT_MAP: any = { '♠': 'S', '♥': 'H', '♦': 'D', '♣': 'C' };
 const getAvatar = (name: string) => `https://api.dicebear.com/7.x/adventurer/svg?seed=${name || 'default'}`;
 
+// 🛡️ ПЕРЕВОДЧИК ОШИБОК
+const translateError = (err: string) => {
+  if (err.includes('WRONG_COUNT')) return 'Неверное количество карт: нужно выделить ровно столько же, сколько на столе.';
+  if (err.includes('CANNOT_BEAT')) return 'Эти карты не бьют карты на столе. Выберите другие или нажмите «Бита».';
+  if (err.includes('NOT_YOUR_TURN')) return 'Сейчас не ваш ход!';
+  if (err.includes('WRONG_PHASE')) return 'Сейчас нельзя делать этот ход.';
+  if (err.includes('CARD_NOT_IN_HAND')) return 'У вас нет такой карты в руке.';
+  if (err.includes('DUPLICATE_CARDS')) return 'Вы выбрали одинаковые карты.';
+  if (err.includes('ILLEGAL_SET')) return 'Нельзя смешивать разные масти в одном ходе.';
+  if (err.includes('NO_TRICK')) return 'На столе нет карт, которые можно отбить. Сделайте ход.';
+  if (err.includes('TRICK_EXISTS')) return 'На столе уже есть карты, сначала их нужно отбить.';
+  return err;
+};
+
 let globalAudioCtx: AudioContext | null = null;
 
 const playSound = (type: 'card' | 'deal' | 'chat' | 'trump' | 'win' | 'lose' | 'click' | 'pop' | 'dice' | 'rain' | 'dev_join' | 'secret' | 'gold' | 'reverse') => {
@@ -332,7 +346,7 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole }: { 
       setSelectedCards([]); 
     };
 
-    const onError = (msg: string) => { setErrorMsg(msg); setTimeout(() => setErrorMsg(null), 3000); };
+    const onError = (msg: string) => { setErrorMsg(translateError(msg)); setTimeout(() => setErrorMsg(null), 3000); };
     const onChatMessage = (msg: any) => {
       if (msg.id && lastProcessedMsgId.current === msg.id) return; 
       lastProcessedMsgId.current = msg.id || null;
@@ -435,14 +449,13 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole }: { 
 
   const playCards = () => { if (selectedCards.length === 0) return; playSound('click'); socket.emit('play_card', roomId, selectedCards); };
   const beat = () => { if (selectedCards.length === 0) return; playSound('click'); socket.emit('pass_or_beat', roomId, 'beat', selectedCards); };
-  
-  // Отправляем выделенные карты в биту
   const bita = () => { playSound('click'); socket.emit('pass_or_beat', roomId, 'pass', selectedCards); };
 
   const isMyTurn = gameState.currentPlayer === gameState.me;
-  const isAttacker = gameState.trick?.attacker === gameState.me;
-  const required = gameState.trick?.required || 1;
   const isDev = username === DEV_NAME;
+  
+  // 🛡️ ИСПРАВЛЕНИЕ: Берем required из trick, либо считаем по картам на столе
+  const required = gameState.trick?.required || gameState.trick?.cardsOnTable?.length || 1;
 
   return (
     <div onClick={unlockAudio} style={{
@@ -617,13 +630,13 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole }: { 
           )}
 
           {/* Кнопка сброса взятки */}
-          {isMyTurn && gameState.trick && (isAttacker || selectedCards.length === required) && (
+          {isMyTurn && gameState.trick && (gameState.trick.attacker === gameState.me || selectedCards.length === required) && (
             <button onClick={bita} style={{ padding: '10px 30px', background: '#f44336', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', color: '#fff', boxShadow: '0 4px 0 #c62828' }}>Бита (Ваше)</button>
           )}
           
           {!isMyTurn && <div style={{ color: '#555', alignSelf: 'center' }}>Ожидание соперника...</div>}
-          {isMyTurn && gameState.trick && selectedCards.length !== required && (
-             <div style={{ color: '#555', alignSelf: 'center' }}>Выделите карты для отбоя или сброса ({required} шт.)</div>
+          {isMyTurn && gameState.trick && selectedCards.length !== required && gameState.trick.attacker !== gameState.me && (
+             <div style={{ color: '#aaa', alignSelf: 'center', fontSize: 14 }}>Выделите ровно {required} карт(ы) для отбоя или сброса</div>
           )}
           
           <button onClick={() => { playSound('click'); setRoomId(null); }} style={{ marginLeft: '20px', padding: '10px 20px', background: 'transparent', color: '#aaa', border: '1px solid #555', borderRadius: '8px', cursor: 'pointer' }}>Выйти</button>

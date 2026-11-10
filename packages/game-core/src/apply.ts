@@ -1,10 +1,11 @@
 import { GameState, PlayerId, TrickState, Side } from './state';
-import { createDeck, shuffle } from './deck';
-import { Card } from './card';
+import { createDeck, shuffle, mulberry32 } from './deck';
+import { Card, cardEquals } from './card';
 import { canBeat } from './trick';
+import { calculatePoints } from './scoring';
 
 export type GameEvent =
-  | { type: 'START_ROUND'; firstPlayer: PlayerId }
+  | { type: 'START_ROUND'; firstPlayer: PlayerId; seed?: number }
   | { type: 'ATTACK'; player: PlayerId; cards: Card[] }
   | { type: 'BEAT'; player: PlayerId; cards: Card[] }
   | { type: 'PASS'; player: PlayerId; cards: Card[] }
@@ -20,12 +21,11 @@ export type ApplyResult =
   | { ok: true; state: GameState }
   | { ok: false; error: RuleError };
 
-// Защита от читов: проверяем, что карты реально есть в руке, и удаляем их по одной (ловит дубликаты)
 function takeFromHand(hand: Card[], cards: Card[]): Card[] | null {
   const rest = [...hand];
   for (const c of cards) {
-    const i = rest.findIndex(h => h.suit === c.suit && h.rank === c.rank);
-    if (i === -1) return null; // Карты нет в руке или это дубликат
+    const i = rest.findIndex(h => cardEquals(h, c));
+    if (i === -1) return null;
     rest.splice(i, 1);
   }
   return rest;
@@ -38,10 +38,10 @@ export function applyEvent(state: GameState, event: GameEvent): ApplyResult {
   });
 
   if (event.type === 'START_ROUND') {
-    const deck = shuffle(createDeck());
+    const rng = mulberry32(event.seed || Math.floor(Math.random() * 1000000));
+    const deck = shuffle(createDeck(), rng);
     const numPlayers = state.mode === '1v1' ? 2 : 4;
     
-    // Раздаем только активным игрокам (исправлен баг с бесконечным циклом и дублем козыря в 1v1)
     const players = state.players.map((p, i) => {
       if (i < numPlayers) return { ...p, hand: deck.slice(i * 6, (i + 1) * 6) };
       return { ...p, hand: [] };
@@ -55,7 +55,7 @@ export function applyEvent(state: GameState, event: GameEvent): ApplyResult {
       players, deck: [...rest.slice(0, mid), trump, ...rest.slice(mid)], 
       trumpCard: trump, trump: trump.suit, trumpChanged: false, trumpChangeEvent: null, 
       currentPlayer: event.firstPlayer, trick: null, lastTrickWinner: null, phase: 'playing', 
-      bita: { A: [], B: [] }, roundNumber: (state.roundNumber || 0) + 1, lastRoundPoints: null, diceRolls: null 
+      bita: { A: [], B: [] }, roundNumber: (state.roundNumber || 0) + 1, lastRoundPoints: null, diceRolls: null, seed: event.seed
     });
   }
 
@@ -104,7 +104,6 @@ export function applyEvent(state: GameState, event: GameEvent): ApplyResult {
     if (state.currentPlayer !== event.player) return { ok: false, error: 'NOT_YOUR_TURN' };
     if (!state.trick) return { ok: false, error: 'NO_TRICK' };
 
-    // Если сбрасываем карты, их должно быть ровно столько же, сколько на столе
     if (event.cards.length > 0 && event.cards.length !== state.trick.required) {
       return { ok: false, error: 'WRONG_COUNT' };
     }
@@ -123,21 +122,19 @@ export function applyEvent(state: GameState, event: GameEvent): ApplyResult {
   }
 
   if (event.type === 'DRAW') {
-    // Честное копирование, чтобы не мутировать стейт (защита от рассинхрона)
     let s = { ...state, deck: [...state.deck], players: state.players.map(p => ({ ...p, hand: [...p.hand] })) };
     s.trick = null; s.lastTrickWinner = event.winner; s.currentPlayer = event.winner;
     
     let current = event.winner;
     const numPlayers = s.mode === '1v1' ? 2 : 4;
-    let iterations = 0; // Страховка от зацикливания
+    let iterations = 0;
 
-    // Проверяем только активных игроков
     while (s.deck.length > 0 && s.players.slice(0, numPlayers).some(p => p.hand.length < 6) && iterations < 100) {
       iterations++;
       if (s.players[current].hand.length < 6) {
         const card = s.deck.shift()!;
         
-        if (!s.trumpChanged && s.trumpCard && card.suit === s.trumpCard.suit && card.rank === s.trumpCard.rank) {
+        if (!s.trumpChanged && s.trumpCard && cardEquals(card, s.trumpCard)) {
           s.players[current].hand.push(card); s.trumpChanged = true;
           if (s.deck.length > 0) {
             const newTrump = s.deck[0]; s.trump = newTrump.suit; s.trumpCard = newTrump;
@@ -145,7 +142,7 @@ export function applyEvent(state: GameState, event: GameEvent): ApplyResult {
           }
         } else {
           s.players[current].hand.push(card);
-          if (s.trumpChanged && s.trumpCard && card.suit === s.trumpCard.suit && card.rank === s.trumpCard.rank) {
+          if (s.trumpChanged && s.trumpCard && cardEquals(card, s.trumpCard)) {
             s.trumpCard = null;
           }
         }
@@ -158,8 +155,8 @@ export function applyEvent(state: GameState, event: GameEvent): ApplyResult {
   if (event.type === 'SCORE_ROUND') {
     if (state.phase !== 'playing') return { ok: false, error: 'WRONG_PHASE' };
 
-    const pointsA = state.bita.A.reduce((sum, c) => sum + ({ '6':0, '7':0, '8':0, '9':0, 'J':2, 'Q':3, 'K':4, '10':10, 'A':11 }[c.rank] || 0), 0);
-    const pointsB = state.bita.B.reduce((sum, c) => sum + ({ '6':0, '7':0, '8':0, '9':0, 'J':2, 'Q':3, 'K':4, '10':10, 'A':11 }[c.rank] || 0), 0);
+    const pointsA = calculatePoints(state.bita.A);
+    const pointsB = calculatePoints(state.bita.B);
     
     let winnerSide: Side | null = null; 
     let basePenalty = 0;

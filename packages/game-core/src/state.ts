@@ -42,7 +42,8 @@ export interface GameState {
   diceRolls: Partial<Record<PlayerId, number>> | null;
   stateVersion: number;
   turnDeadline: number | null;
-  settled?: boolean; // <--- НОВОЕ: защита от накрутки статистики
+  settled?: boolean;
+  seed?: number;
 }
 
 // --- ТО, ЧТО ВИДИТ КЛИЕНТ ---

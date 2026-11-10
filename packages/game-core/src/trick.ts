@@ -1,25 +1,44 @@
-import { Card, Suit, RANK_ORDER } from './card';
+import { Card, Suit, RANK_VALUE } from './card';
 
-export function canBeat(played: Card[], attack: Card[], trump: Suit): boolean {
-  if (played.length !== attack.length) return false;
-  if (played.length === 0) return false;
+// newCards - это твои карты (которыми ты бьешь).
+// tableCards - это карты, которые лежат на столе.
+export function canBeat(newCards: Card[], tableCards: Card[], trump: Suit): boolean {
+  if (newCards.length !== tableCards.length) return false;
+  
+  // Сортируем обе группы по убыванию, чтобы сравнивать самые сильные карты
+  const sortedNew = [...newCards].sort((a, b) => RANK_VALUE[b.rank] - RANK_VALUE[a.rank]);
+  const sortedTable = [...tableCards].sort((a, b) => RANK_VALUE[b.rank] - RANK_VALUE[a.rank]);
 
-  const check = (remainingPlayed: Card[], remainingAttack: Card[]): boolean => {
-    if (remainingPlayed.length === 0) return true;
-    const p = remainingPlayed[0];
-    for (let i = 0; i < remainingAttack.length; i++) {
-      const a = remainingAttack[i];
-      let beats = false;
-      if (p.suit === a.suit) { beats = RANK_ORDER[p.rank] > RANK_ORDER[a.rank]; }
-      else if (p.suit === trump && a.suit !== trump) { beats = true; }
-      else if (p.suit === trump && a.suit === trump) { beats = RANK_ORDER[p.rank] > RANK_ORDER[a.rank]; }
-      if (beats) {
-        const newPlayed = remainingPlayed.slice(1);
-        const newAttack = [...remainingAttack.slice(0, i), ...remainingAttack.slice(i + 1)];
-        if (check(newPlayed, newAttack)) return true;
+  const used = new Array(sortedNew.length).fill(false);
+
+  // Рекурсивная функция (поиск с возвратом)
+  function match(tableIndex: number): boolean {
+    if (tableIndex === sortedTable.length) return true;
+    
+    const tableCard = sortedTable[tableIndex];
+    
+    for (let i = 0; i < sortedNew.length; i++) {
+      if (used[i]) continue;
+      const newCard = sortedNew[i];
+      
+      let valid = false;
+      // Если масть совпадает — наша карта должна быть старше
+      if (newCard.suit === tableCard.suit) {
+        if (RANK_VALUE[newCard.rank] > RANK_VALUE[tableCard.rank]) valid = true;
+      } 
+      // Если бьем козырем, а на столе не козырь — бьем
+      else if (newCard.suit === trump && tableCard.suit !== trump) {
+        valid = true;
+      }
+      
+      if (valid) {
+        used[i] = true;
+        if (match(tableIndex + 1)) return true; // Если сработало — отлично
+        used[i] = false; // Если нет — откатываем (backtracking)
       }
     }
     return false;
-  };
-  return check(played, attack);
+  }
+
+  return match(0);
 }
