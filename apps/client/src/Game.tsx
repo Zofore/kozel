@@ -5,7 +5,6 @@ const DEV_NAME = 'Vladislav';
 const SUIT_MAP: any = { '♠': 'S', '♥': 'H', '♦': 'D', '♣': 'C' };
 const getAvatar = (name: string) => `https://api.dicebear.com/7.x/adventurer/svg?seed=${name || 'default'}`;
 
-// 🛡️ ПЕРЕВОДЧИК ОШИБОК
 const translateError = (err: string) => {
   if (err.includes('WRONG_COUNT')) return 'Неверное количество карт: нужно выделить ровно столько же, сколько на столе.';
   if (err.includes('CANNOT_BEAT')) return 'Эти карты не бьют карты на столе. Выберите другие или нажмите «Бита».';
@@ -454,7 +453,6 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole }: { 
   const isMyTurn = gameState.currentPlayer === gameState.me;
   const isDev = username === DEV_NAME;
   
-  // 🛡️ ИСПРАВЛЕНИЕ: Берем required из trick, либо считаем по картам на столе
   const required = gameState.trick?.required || gameState.trick?.cardsOnTable?.length || 1;
 
   return (
@@ -557,8 +555,11 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole }: { 
                <img src={getAvatar(gameState.players[0]?.name)} style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff' }} />{gameState.players[0]?.name === DEV_NAME && '👑 '}{gameState.players[0]?.name}
             </div>
             <div style={{ position: 'relative', width: '60px', height: '90px' }}>
+              {/* 🔽 ИСПРАВЛЕНИЕ: Сдвиг уменьшен (1.5) и ограничен (max 20 пикселей) для левого игрока */}
               {Array.from({ length: gameState.bitaCount?.A || 0 }).map((_, i) => (
-                <div key={i} style={{ position: 'absolute', top: i * 4, left: i * 4 }}><CardView card={{ suit: '♠', rank: '6' }} small faceDown={true} isDevCard={gameState.players[0]?.name === DEV_NAME} /></div>
+                <div key={i} style={{ position: 'absolute', top: Math.min(i * 1.5, 20), left: Math.min(i * 1.5, 20) }}>
+                  <CardView card={{ suit: '♠', rank: '6' }} small faceDown={true} isDevCard={gameState.players[0]?.name === DEV_NAME} />
+                </div>
               ))}
               {(!gameState.bitaCount?.A || gameState.bitaCount.A === 0) && <div style={{ width: '50px', height: '75px', border: '2px dashed #666', borderRadius: '8px', position: 'absolute' }} />}
             </div>
@@ -579,8 +580,11 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole }: { 
                <img src={getAvatar(gameState.players[1]?.name)} style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff' }} />{gameState.players[1]?.name === DEV_NAME && '👑 '}{gameState.players[1]?.name}
             </div>
             <div style={{ position: 'relative', width: '60px', height: '90px' }}>
+              {/* 🔽 ИСПРАВЛЕНИЕ: Сдвиг уменьшен (1.5) и ограничен (max 20 пикселей) для правого игрока */}
               {Array.from({ length: gameState.bitaCount?.B || 0 }).map((_, i) => (
-                <div key={i} style={{ position: 'absolute', top: i * 4, left: i * 4 }}><CardView card={{ suit: '♠', rank: '6' }} small faceDown={true} isDevCard={gameState.players[1]?.name === DEV_NAME} /></div>
+                <div key={i} style={{ position: 'absolute', top: Math.min(i * 1.5, 20), left: Math.min(i * 1.5, 20) }}>
+                  <CardView card={{ suit: '♠', rank: '6' }} small faceDown={true} isDevCard={gameState.players[1]?.name === DEV_NAME} />
+                </div>
               ))}
               {(!gameState.bitaCount?.B || gameState.bitaCount.B === 0) && <div style={{ width: '50px', height: '75px', border: '2px dashed #666', borderRadius: '8px', position: 'absolute' }} />}
             </div>
@@ -619,17 +623,14 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole }: { 
           })}
         </div>
         <div style={{ display: 'flex', gap: '15px', height: '44px', alignItems: 'center', justifyContent: 'center' }}>
-          {/* Кнопка хода (нет взятки) */}
           {isMyTurn && !gameState.trick && selectedCards.length > 0 && (
             <button onClick={playCards} style={{ padding: '10px 30px', background: '#f0c674', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', color: '#000', boxShadow: '0 4px 0 #b08d40' }}>Сделать ход</button>
           )}
           
-          {/* Кнопка перебития (есть взятка, выделено нужное количество карт) */}
           {isMyTurn && gameState.trick && selectedCards.length === required && (
             <button onClick={beat} style={{ padding: '10px 30px', background: '#4caf50', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', color: '#fff', boxShadow: '0 4px 0 #2e7d32' }}>Перебить</button>
           )}
 
-          {/* Кнопка сброса взятки */}
           {isMyTurn && gameState.trick && (gameState.trick.attacker === gameState.me || selectedCards.length === required) && (
             <button onClick={bita} style={{ padding: '10px 30px', background: '#f44336', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', color: '#fff', boxShadow: '0 4px 0 #c62828' }}>Бита (Ваше)</button>
           )}
