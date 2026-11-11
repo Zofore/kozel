@@ -63,7 +63,21 @@ export function Menu({ socket, user, onPlay, onProfile, onFriends, onLogout }: {
           </div>
         </div>
 
-        <h1 style={{ color: '#f0c674', margin: '0 0 5px 0', fontSize: 28 }}>🃏 Козёл</h1>
+        {/* 🔽 КАСТОМНАЯ ИКОНКА КОЗЛА 🔽 */}
+        <h1 style={{ color: '#f0c674', margin: '0 0 5px 0', fontSize: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f0c674" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0 0 5px rgba(240,198,116,0.5))' }}>
+            <path d="M12 22c-4.97 0-9-4.03-9-9 0-3.31 1.8-6.22 4.5-7.8C7.5 3 10 2 12 2c2 0 4.5 1 4.5 3.2 2.7 1.58 4.5 4.49 4.5 7.8 0 4.97-4.03 9-9 9z" />
+            <path d="M7 8c-1.5 1-2 2.5-2 3.5 0 1 .5 2 1.5 2.5" />
+            <path d="M17 8c1.5 1 2 2.5 2 3.5 0 1-.5 2-1.5 2.5" />
+            <circle cx="9" cy="13" r="1.5" fill="#f0c674" />
+            <circle cx="15" cy="13" r="1.5" fill="#f0c674" />
+            <path d="M10 17c.5.5 1.5.5 2 0" />
+            <path d="M10 19v1.5" />
+            <path d="M14 19v1.5" />
+          </svg>
+          Козёл
+        </h1>
+
         <h2 style={{ fontSize: 18, margin: '0 0 5px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
           {isDev && <span title="Разработчик" style={{ fontSize: 22 }}>👑</span>}
           <span className={isDev ? 'dev-nick' : ''} style={{ color: isDev ? undefined : 'white' }}>
