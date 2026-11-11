@@ -98,7 +98,7 @@ export function App() {
   useEffect(() => {
     if (user) {
       localStorage.setItem('kozel_user', JSON.stringify(user));
-      if (!socket.connected) socket.connect(); // Восстанавливаем соединение при загрузке
+      if (!socket.connected) socket.connect();
       socket.emit('register_online', user.username);
     }
   }, [user]);
@@ -175,20 +175,32 @@ export function App() {
 
   const handleAuth = (token: string, userData: any) => {
     localStorage.setItem('kozel_token', token);
-    // ПРИНУДИТЕЛЬНОЕ ПЕРЕПОДКЛЮЧЕНИЕ С НОВЫМ ТОКЕНОМ
     socket.auth = { token }; 
     socket.connect();
-    
     setUser(userData);
   };
 
   const handleLogout = () => {
     localStorage.clear();
-    socket.disconnect(); // Отключаем сокет при выходе
+    socket.disconnect();
     setUser(null);
     setRoomId(null);
     setView('menu');
     setDevConsoleOpen(false);
+  };
+
+  // 🛡️ НОВАЯ ФУНКЦИЯ: Обновляем статистику из БД и выходим в лобби
+  const handleExitToLobby = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/user/profile/${user.username}`);
+      if (res.ok) {
+        const data = await res.json();
+        setUser((prev: any) => ({ ...prev, wins: data.wins, losses: data.losses }));
+      }
+    } catch (e) {
+      console.error("Не удалось обновить статистику", e);
+    }
+    setRoomId(null);
   };
 
   const updateProfile = async (status: string, avatar: string) => {
@@ -216,7 +228,7 @@ export function App() {
 
   let content;
   if (roomId) {
-    content = <Game socket={socket} roomId={roomId} setRoomId={setRoomId} username={user.username} openDevConsole={() => setDevConsoleOpen(true)} />;
+    content = <Game socket={socket} roomId={roomId} setRoomId={setRoomId} username={user.username} openDevConsole={() => setDevConsoleOpen(true)} onExit={handleExitToLobby} />;
   }
   else if (view === 'profile') content = <ProfileSettings user={user} onSave={updateProfile} onBack={() => setView('menu')} />;
   else if (view === 'friends') content = <Friends socket={socket} user={user} onBack={() => setView('menu')} showToast={showToast} />;

@@ -164,8 +164,9 @@ export function applyEvent(state: GameState, event: GameEvent): ApplyResult {
     if (pointsA === 60 && pointsB === 60) { return nextState({ multiplier: state.multiplier * 2, phase: 'round-scored', lastRoundPoints: { A: pointsA, B: pointsB } }); }
     if (pointsA === pointsB) { return nextState({ phase: 'round-scored', lastRoundPoints: { A: pointsA, B: pointsB } }); }
 
-    if (pointsA > 60) { winnerSide = 'A'; basePenalty = pointsB === 0 ? 4 : (pointsB < 32 ? 4 : 2); }
-    else if (pointsB > 60) { winnerSide = 'B'; basePenalty = pointsA === 0 ? 4 : (pointsA < 32 ? 4 : 2); }
+    // 🛡️ ИСПРАВЛЕНИЕ: Если 0 очков, то штраф 6 баллов (а не 4)
+    if (pointsA > 60) { winnerSide = 'A'; basePenalty = pointsB === 0 ? 6 : (pointsB < 32 ? 4 : 2); }
+    else if (pointsB > 60) { winnerSide = 'B'; basePenalty = pointsA === 0 ? 6 : (pointsA < 32 ? 4 : 2); }
     else { winnerSide = pointsA > pointsB ? 'A' : 'B'; basePenalty = 6; }
     
     const loserSide: Side = winnerSide === 'A' ? 'B' : 'A';

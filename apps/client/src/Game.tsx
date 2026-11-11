@@ -293,7 +293,7 @@ const DiceRollScreen = ({ gameState }: { gameState: any }) => {
   );
 };
 
-export function Game({ socket, roomId, setRoomId, username, openDevConsole }: { socket: Socket, roomId: string, setRoomId: any, username: string, openDevConsole?: () => void }) {
+export function Game({ socket, roomId, setRoomId, username, openDevConsole, onExit }: { socket: Socket, roomId: string, setRoomId: any, username: string, openDevConsole?: () => void, onExit: () => void }) {
   const [gameState, setGameState] = useState<any>(null);
   const [selectedCards, setSelectedCards] = useState<any[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -310,6 +310,7 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole }: { 
   const [devJoinAlert, setDevJoinAlert] = useState<string | null>(null);
   const [secretFx, setSecretFx] = useState(false);
   const [goldEmojis, setGoldEmojis] = useState<any[]>([]);
+  const [matchConfetti, setMatchConfetti] = useState<any[]>([]);
   const [isReversed, setIsReversed] = useState(false);
 
   const prevState = useRef<any>(null);
@@ -334,10 +335,23 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole }: { 
         const newTrickLen = state.trick ? state.trick.cardsOnTable.length : 0;
         if (newTrickLen > prevTrickLen) playSound('card');
         if (state.deckCount < prevState.current.deckCount || state.roundNumber > prevState.current.roundNumber) playSound('deal');
-        if (state.phase === 'round-scored' && prevState.current.phase === 'playing') {
+        
+        // 🎵 ЗВУКИ ДЛЯ КОНЦА ИГРЫ
+        if (state.phase === 'finished' && prevState.current.phase !== 'finished') {
           const mySide = state.players[state.me]?.side;
-          const myPts = state.lastRoundPoints ? state.lastRoundPoints[mySide] : 0;
-          if (myPts > 60) playSound('win'); else if (myPts < 60) playSound('lose');
+          const amIWinner = (state.matchScore.A >= 24 && mySide === 'B') || (state.matchScore.B >= 24 && mySide === 'A');
+          if (amIWinner) {
+            playSound('win');
+            const emojis = ['🎉', '🎊', '🏆', '🥇', '💰', '👑', '🌟'];
+            setMatchConfetti(Array.from({ length: 100 }).map((_, i) => ({
+              id: Date.now() + i,
+              emoji: emojis[Math.floor(Math.random() * emojis.length)],
+              left: Math.random() * 100,
+              duration: 2 + Math.random() * 3,
+            })));
+          } else {
+            playSound('lose');
+          }
         }
       }
       prevState.current = state;
@@ -391,7 +405,7 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole }: { 
           <div style={{ fontSize: 60, marginBottom: 20 }}>⏳</div><h2 style={{ color: '#f0c674', margin: '0 0 20px 0' }}>Ожидание игроков...</h2>
           <p style={{ color: '#ccc', marginBottom: 20 }}>Отправьте ID комнаты другу, чтобы он присоединился</p>
           <div style={{ background: '#1a1a2e', padding: 15, borderRadius: 8, fontSize: 24, fontWeight: 'bold', letterSpacing: 3, color: '#f0c674', marginBottom: 20 }}>{roomId}</div>
-          <button onClick={() => { playSound('click'); setRoomId(null); }} style={{ padding: '12px 30px', background: 'transparent', color: '#f44336', border: '1px solid #f44336', borderRadius: 8, fontSize: 16, cursor: 'pointer', width: '100%' }}>Отменить</button>
+          <button onClick={() => { playSound('click'); onExit(); }} style={{ padding: '12px 30px', background: 'transparent', color: '#f44336', border: '1px solid #f44336', borderRadius: 8, fontSize: 16, cursor: 'pointer', width: '100%' }}>Отменить</button>
         </div>
       </div>
     );
@@ -408,13 +422,33 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole }: { 
     const colorA = scoreA < scoreB ? '#4caf50' : (scoreA > scoreB ? '#f44336' : 'white');
     const colorB = scoreB < scoreA ? '#4caf50' : (scoreB > scoreA ? '#f44336' : 'white');
 
+    let matchTitle = isFinished ? 'Игра окончена!' : `Кон ${gameState.roundNumber || 1} завершен!`;
+    let matchEmotion = '';
+    let titleColor = '#f0c674';
+
+    if (isFinished) {
+      const mySide = gameState.players[gameState.me]?.side;
+      const amIWinner = (gameState.matchScore.A >= 24 && mySide === 'B') || (gameState.matchScore.B >= 24 && mySide === 'A');
+      
+      const tauntsWin = ['🏆 АБСОЛЮТНЫЙ ЧЕМПИОН! 🏆', '👑 Ты разнес их в пух и прах!', '🔥 Король стола, не иначе!', '💰 Забирай всё, ты лучший!'];
+      const tauntsLose = ['💀 СЛИВ ЗАЩИТАН, БРАТИШКА 💀', '🤡 Иди учись играть, козёл!', '📉 Твоя бабушка играет лучше', '🗑️ Мусорка с тобой не согласна'];
+
+      matchTitle = amIWinner ? tauntsWin[Math.floor(Math.random() * tauntsWin.length)] : tauntsLose[Math.floor(Math.random() * tauntsLose.length)];
+      titleColor = amIWinner ? '#ffd700' : '#f44336';
+      matchEmotion = amIWinner ? 'Ты заслужил эту победу. Отдыхай!' : 'Не расстраивайся, в следующий раз повезёт. Или нет.';
+    }
+
     return (
-      <div onClick={unlockAudio} style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#1a1a2e' }}>
+      <div onClick={unlockAudio} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', background: isFinished ? (titleColor === '#ffd700' ? 'radial-gradient(circle, #2a2a10 0%, #0a0a05 100%)' : 'radial-gradient(circle, #2a1010 0%, #0a0505 100%)') : '#1a1a2e', position: 'relative', overflow: 'hidden' }}>
         <style>{floatingEmojiStyle}</style>
         {floatingEmojis.map(e => <div key={e.id} className="floating-emoji" style={{ left: `${e.left}%` }}>{e.emoji}</div>)}
         {rainEmojis.map(e => <div key={e.id} className="rain-emoji" style={{ left: `${e.left}%`, animationDuration: `${e.duration}s` }}>{e.emoji}</div>)}
-        <div style={{ padding: 40, textAlign: 'center', color: 'white', maxWidth: 600, background: 'linear-gradient(180deg, #1a1a2e, #0f3460)', borderRadius: 16, boxShadow: '0 10px 30px rgba(0,0,0,0.5)', border: '2px solid #f0c674' }}>
-          <h1 style={{ color: '#f0c674' }}>{isFinished ? 'Игра окончена!' : `Кон ${gameState.roundNumber || 1} завершен!`}</h1>
+        {matchConfetti.map(e => <div key={e.id} className="gold-emoji" style={{ left: `${e.left}%`, animationDuration: `${e.duration}s`, fontSize: 40 }}>{e.emoji}</div>)}
+
+        <div style={{ padding: 40, textAlign: 'center', color: 'white', maxWidth: 600, background: 'rgba(20, 20, 35, 0.95)', backdropFilter: 'blur(10px)', borderRadius: 16, boxShadow: isFinished ? `0 10px 30px rgba(0,0,0,0.8), 0 0 40px ${titleColor}40` : '0 10px 30px rgba(0,0,0,0.5)', border: `2px solid ${titleColor}`, zIndex: 10 }}>
+          <h1 style={{ color: titleColor, fontSize: isFinished ? 42 : 32, textShadow: `0 0 20px ${titleColor}80`, marginBottom: 10 }}>{matchTitle}</h1>
+          {isFinished && <p style={{ color: '#ccc', fontSize: 18, marginBottom: 30 }}>{matchEmotion}</p>}
+          
           {gameState.lastRoundPoints && (
             <div style={{ background: 'rgba(255,255,255,0.1)', padding: 15, borderRadius: 12, margin: '20px 0' }}>
               <h3 style={{ margin: '0 0 10px 0', color: '#aaa', fontSize: 16 }}>Очки за кон (карты):</h3>
@@ -424,7 +458,7 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole }: { 
               {ptsA === 60 && ptsB === 60 && <div style={{ color: '#f0c674', marginTop: 10, fontWeight: 'bold' }}>ЯЙЦА! (60:60)</div>}
             </div>
           )}
-          <div style={{ fontSize: 20, margin: '30px 0', lineHeight: '1.6', background: '#1e1e36', padding: 20, borderRadius: 12, border: '1px solid #333' }}>
+          <div style={{ fontSize: 20, margin: '30px 0', lineHeight: '1.6', background: 'rgba(0,0,0,0.4)', padding: 20, borderRadius: 12, border: '1px solid #333' }}>
             <h3 style={{ margin: '0 0 15px 0', color: '#aaa', fontSize: 16 }}>Штрафные баллы (до 24):</h3>
             <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
               <div style={{ color: colorA }}><div style={{ fontSize: 16, marginBottom: 5 }}>{gameState.players[0]?.name}</div><div style={{ fontSize: 32, fontWeight: 'bold' }}>{scoreA}</div></div>
@@ -433,7 +467,7 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole }: { 
             </div>
             <div style={{ fontSize: 12, color: '#666', marginTop: 15 }}>Тот, у кого меньше баллов, играет лучше! (Зеленый)</div>
           </div>
-          {isFinished ? <button onClick={() => { playSound('click'); setRoomId(null); }} style={{ padding: '15px 40px', background: '#f0c674', border: 'none', borderRadius: 8, fontSize: 20, fontWeight: 'bold', cursor: 'pointer' }}>Выйти в лобби</button> : <button onClick={() => { playSound('click'); socket.emit('next_round', roomId); }} style={{ padding: '15px 40px', background: '#f0c674', border: 'none', borderRadius: 8, fontSize: 20, fontWeight: 'bold', cursor: 'pointer' }}>Следующий кон</button>}
+          {isFinished ? <button onClick={() => { playSound('click'); onExit(); }} style={{ padding: '15px 40px', background: titleColor, border: 'none', borderRadius: 8, fontSize: 20, fontWeight: 'bold', cursor: 'pointer', color: titleColor === '#ffd700' ? '#000' : '#fff' }}>Выйти в лобби</button> : <button onClick={() => { playSound('click'); socket.emit('next_round', roomId); }} style={{ padding: '15px 40px', background: '#f0c674', border: 'none', borderRadius: 8, fontSize: 20, fontWeight: 'bold', cursor: 'pointer' }}>Следующий кон</button>}
         </div>
       </div>
     );
@@ -452,7 +486,6 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole }: { 
 
   const isMyTurn = gameState.currentPlayer === gameState.me;
   const isDev = username === DEV_NAME;
-  
   const required = gameState.trick?.required || gameState.trick?.cardsOnTable?.length || 1;
 
   return (
@@ -555,7 +588,6 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole }: { 
                <img src={getAvatar(gameState.players[0]?.name)} style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff' }} />{gameState.players[0]?.name === DEV_NAME && '👑 '}{gameState.players[0]?.name}
             </div>
             <div style={{ position: 'relative', width: '60px', height: '90px' }}>
-              {/* 🔽 ИСПРАВЛЕНИЕ: Сдвиг уменьшен (1.5) и ограничен (max 20 пикселей) для левого игрока */}
               {Array.from({ length: gameState.bitaCount?.A || 0 }).map((_, i) => (
                 <div key={i} style={{ position: 'absolute', top: Math.min(i * 1.5, 20), left: Math.min(i * 1.5, 20) }}>
                   <CardView card={{ suit: '♠', rank: '6' }} small faceDown={true} isDevCard={gameState.players[0]?.name === DEV_NAME} />
@@ -580,7 +612,6 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole }: { 
                <img src={getAvatar(gameState.players[1]?.name)} style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff' }} />{gameState.players[1]?.name === DEV_NAME && '👑 '}{gameState.players[1]?.name}
             </div>
             <div style={{ position: 'relative', width: '60px', height: '90px' }}>
-              {/* 🔽 ИСПРАВЛЕНИЕ: Сдвиг уменьшен (1.5) и ограничен (max 20 пикселей) для правого игрока */}
               {Array.from({ length: gameState.bitaCount?.B || 0 }).map((_, i) => (
                 <div key={i} style={{ position: 'absolute', top: Math.min(i * 1.5, 20), left: Math.min(i * 1.5, 20) }}>
                   <CardView card={{ suit: '♠', rank: '6' }} small faceDown={true} isDevCard={gameState.players[1]?.name === DEV_NAME} />
@@ -640,7 +671,7 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole }: { 
              <div style={{ color: '#aaa', alignSelf: 'center', fontSize: 14 }}>Выделите ровно {required} карт(ы) для отбоя или сброса</div>
           )}
           
-          <button onClick={() => { playSound('click'); setRoomId(null); }} style={{ marginLeft: '20px', padding: '10px 20px', background: 'transparent', color: '#aaa', border: '1px solid #555', borderRadius: '8px', cursor: 'pointer' }}>Выйти</button>
+          <button onClick={() => { playSound('click'); onExit(); }} style={{ marginLeft: '20px', padding: '10px 20px', background: 'transparent', color: '#aaa', border: '1px solid #555', borderRadius: '8px', cursor: 'pointer' }}>Выйти</button>
         </div>
       </div>
     </div>

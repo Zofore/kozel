@@ -59,6 +59,15 @@ async function main() {
     return { success: true, token, user: { username: user.username, fullname: user.fullname, avatar: user.avatar || '', status: user.status || 'В сети', friends: user.friends || [], wins: user.wins || 0, losses: user.losses || 0 } };
   });
 
+  // 🛡️ НОВЫЙ РОУТ: Получение актуальной статистики для игрока
+  app.get('/api/user/profile/:username', async (req, reply) => {
+    const { username } = req.params as any;
+    const users = await db.getUsers();
+    const user = users.find(u => u.username === username);
+    if (!user) return reply.code(404).send({ error: 'Пользователь не найден' });
+    return { username: user.username, wins: user.wins || 0, losses: user.losses || 0, avatar: user.avatar || '', status: user.status || 'В сети' };
+  });
+
   app.post('/api/user/update', async (req, reply) => {
     const { username, status, avatar } = req.body as any;
     const users = await db.getUsers();
