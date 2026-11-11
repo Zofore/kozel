@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Socket } from 'socket.io-client';
 
 const DEV_NAME = 'Vladislav';
+const API_URL = 'https://kozel-server-zofore-4jhk.onreza.app';
 
 export function Friends({ socket, user, onBack, showToast }: { socket: Socket, user: any, onBack: () => void, showToast: (msg: string, type?: 'success' | 'error' | 'info') => void }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -13,7 +14,7 @@ export function Friends({ socket, user, onBack, showToast }: { socket: Socket, u
   const [friendToDelete, setFriendToDelete] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`http://localhost:3005/api/friends/list/${user.username}`)
+    fetch(`${API_URL}/api/friends/list/${user.username}`)
       .then(res => res.json())
       .then(data => {
         setFriends(data.friends || []);
@@ -33,7 +34,7 @@ export function Friends({ socket, user, onBack, showToast }: { socket: Socket, u
     setHasSearched(true);
     setSearchResults([]); 
     try {
-      const res = await fetch(`http://localhost:3005/api/users/search?q=${encodeURIComponent(query)}`);
+      const res = await fetch(`${API_URL}/api/users/search?q=${encodeURIComponent(query)}`);
       if (!res.ok) throw new Error('Ошибка поиска');
       const data = await res.json();
       setSearchResults((data.users || []).filter((u: any) => u.username !== user.username));
@@ -44,7 +45,7 @@ export function Friends({ socket, user, onBack, showToast }: { socket: Socket, u
 
   const sendRequest = async (targetUsername: string) => {
     try {
-      const res = await fetch('http://localhost:3005/api/friends/request', {
+      const res = await fetch(`${API_URL}/api/friends/request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: user.username, targetUsername })
@@ -62,7 +63,7 @@ export function Friends({ socket, user, onBack, showToast }: { socket: Socket, u
   };
 
   const respondRequest = async (requesterUsername: string, action: 'accept' | 'decline') => {
-    await fetch('http://localhost:3005/api/friends/respond', {
+    await fetch(`${API_URL}/api/friends/respond`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: user.username, requesterUsername, action })
@@ -73,7 +74,7 @@ export function Friends({ socket, user, onBack, showToast }: { socket: Socket, u
 
   const confirmDelete = async () => {
     if (!friendToDelete) return;
-    await fetch('http://localhost:3005/api/friends/remove', {
+    await fetch(`${API_URL}/api/friends/remove`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: user.username, friendUsername: friendToDelete })

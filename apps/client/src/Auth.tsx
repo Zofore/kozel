@@ -1,9 +1,6 @@
 import React, { useState } from 'react';
 
-const REGEX_NICKNAME = /^[a-zA-Zа-яА-ЯёЁ\s]{1,21}$/;
-const REGEX_PASSWORD = /^.{1,21}$/;
-const REGEX_FULLNAME = /^[a-zA-Zа-яА-ЯёЁ\s-]{1,50}$/;
-const REGEX_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const API_URL = 'https://kozel-server-zofore-4jhk.onreza.app';
 
 export function Auth({ onAuth }: { onAuth: (token: string, user: any) => void }) {
   const [isLogin, setIsLogin] = useState(true);
@@ -16,26 +13,19 @@ export function Auth({ onAuth }: { onAuth: (token: string, user: any) => void })
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isLogin) {
-      if (!REGEX_NICKNAME.test(username)) return setError('Никнейм: только буквы и пробелы, до 21 символа');
-      if (!REGEX_PASSWORD.test(password)) return setError('Пароль: до 21 символа');
-      if (!REGEX_FULLNAME.test(fullname)) return setError('ФИО: только буквы, пробелы и дефисы');
-      if (!REGEX_EMAIL.test(email)) return setError('Введите корректный Email');
-    }
-
-    setLoading(true);
     setError(null);
-
-    const endpoint = isLogin ? '/api/login' : '/api/register';
-    const body = isLogin ? { username, password } : { username, password, fullname, email };
+    setLoading(true);
 
     try {
-      const res = await fetch(`http://localhost:3005${endpoint}`, {
+      const endpoint = isLogin ? `${API_URL}/api/login` : `${API_URL}/api/register`;
+      const body = isLogin ? { username, password } : { username, password, fullname, email };
+
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       });
-      
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Ошибка сервера');
 
@@ -46,38 +36,79 @@ export function Auth({ onAuth }: { onAuth: (token: string, user: any) => void })
         setError('Регистрация успешна! Теперь войдите.');
       }
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message === 'Failed to fetch' ? 'Сервер недоступен. Подождите немного.' : err.message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'radial-gradient(circle, #1a1a2e 0%, #0f3460 100%)' }}>
-      <form onSubmit={handleSubmit} style={{ background: 'rgba(37, 37, 64, 0.9)', padding: 40, borderRadius: 20, boxShadow: '0 10px 30px rgba(0,0,0,0.8)', border: '2px solid #f0c674', width: 340, textAlign: 'center' }}>
-        <h1 style={{ color: '#f0c674', margin: '0 0 20px 0', fontSize: 28 }}>🃏 Козёл</h1>
-        <h2 style={{ color: 'white', margin: '0 0 20px 0', fontSize: 18 }}>{isLogin ? 'Вход в аккаунт' : 'Регистрация'}</h2>
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: 'radial-gradient(circle, #1a1a2e 0%, #0f3460 100%)', color: 'white' }}>
+      <div style={{ background: 'rgba(37, 37, 64, 0.85)', backdropFilter: 'blur(10px)', padding: 40, borderRadius: 20, boxShadow: '0 10px 30px rgba(0,0,0,0.8), 0 0 20px rgba(240,198,116,0.2)', border: '2px solid #f0c674', textAlign: 'center', width: 320 }}>
+        <div style={{ fontSize: 40, marginBottom: 10 }}>🃏</div>
+        <h1 style={{ color: '#f0c674', margin: '0 0 20px 0', fontSize: 28 }}>Козёл</h1>
         
-        {error && <div style={{ background: '#d32f2f', color: 'white', padding: 10, borderRadius: 8, marginBottom: 15, fontSize: 14 }}>{error}</div>}
+        <h2 style={{ color: 'white', fontSize: 18, margin: '0 0 20px 0' }}>{isLogin ? 'Вход в аккаунт' : 'Регистрация'}</h2>
 
-        {!isLogin && (
-          <>
-            <input type="text" placeholder="ФИО (Иванов Иван)" value={fullname} onChange={e => setFullname(e.target.value)} maxLength={50} style={{ width: '100%', padding: 12, marginBottom: 10, borderRadius: 8, border: '1px solid #555', background: '#1a1a2e', color: 'white', boxSizing: 'border-box' }} />
-            <input type="email" placeholder="Email (для восстановления)" value={email} onChange={e => setEmail(e.target.value)} style={{ width: '100%', padding: 12, marginBottom: 10, borderRadius: 8, border: '1px solid #555', background: '#1a1a2e', color: 'white', boxSizing: 'border-box' }} />
-          </>
+        {error && (
+          <div style={{ background: '#d32f2f', color: 'white', padding: '10px', borderRadius: '8px', marginBottom: '15px', fontSize: '14px' }}>
+            {error}
+          </div>
         )}
 
-        <input type="text" placeholder="Никнейм (для входа)" value={username} onChange={e => setUsername(e.target.value)} maxLength={21} style={{ width: '100%', padding: 12, marginBottom: 10, borderRadius: 8, border: '1px solid #555', background: '#1a1a2e', color: 'white', boxSizing: 'border-box' }} />
-        <input type="password" placeholder="Пароль" value={password} onChange={e => setPassword(e.target.value)} maxLength={21} style={{ width: '100%', padding: 12, marginBottom: 20, borderRadius: 8, border: '1px solid #555', background: '#1a1a2e', color: 'white', boxSizing: 'border-box' }} />
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
+          <input 
+            type="text" 
+            placeholder="Никнейм" 
+            value={username} 
+            onChange={e => setUsername(e.target.value)} 
+            required 
+            style={{ padding: '12px', borderRadius: 8, border: '1px solid #555', background: 'rgba(26, 26, 46, 0.8)', color: 'white', outline: 'none' }} 
+          />
+          <input 
+            type="password" 
+            placeholder="Пароль" 
+            value={password} 
+            onChange={e => setPassword(e.target.value)} 
+            required 
+            style={{ padding: '12px', borderRadius: 8, border: '1px solid #555', background: 'rgba(26, 26, 46, 0.8)', color: 'white', outline: 'none' }} 
+          />
+          {!isLogin && (
+            <>
+              <input 
+                type="text" 
+                placeholder="ФИО" 
+                value={fullname} 
+                onChange={e => setFullname(e.target.value)} 
+                required 
+                style={{ padding: '12px', borderRadius: 8, border: '1px solid #555', background: 'rgba(26, 26, 46, 0.8)', color: 'white', outline: 'none' }} 
+              />
+              <input 
+                type="email" 
+                placeholder="Email" 
+                value={email} 
+                onChange={e => setEmail(e.target.value)} 
+                required 
+                style={{ padding: '12px', borderRadius: 8, border: '1px solid #555', background: 'rgba(26, 26, 46, 0.8)', color: 'white', outline: 'none' }} 
+              />
+            </>
+          )}
 
-        <button type="submit" disabled={loading} style={{ width: '100%', padding: 15, background: '#4caf50', color: 'white', border: 'none', borderRadius: 8, fontSize: 16, fontWeight: 'bold', cursor: loading ? 'not-allowed' : 'pointer', marginBottom: 15 }}>
-          {loading ? 'Загрузка...' : (isLogin ? 'Войти' : 'Зарегистрироваться')}
-        </button>
+          <button type="submit" disabled={loading} style={{ padding: '15px', background: '#4caf50', color: 'white', border: 'none', borderRadius: 8, fontSize: 16, fontWeight: 'bold', cursor: loading ? 'not-allowed' : 'pointer', marginTop: 10, boxShadow: '0 4px 0 #2e7d32' }}>
+            {loading ? 'Загрузка...' : (isLogin ? 'Войти' : 'Зарегистрироваться')}
+          </button>
+        </form>
 
-        <div style={{ color: '#aaa', fontSize: 14, cursor: 'pointer' }} onClick={() => { setIsLogin(!isLogin); setError(null); }}>
-          {isLogin ? 'Нет аккаунта? Зарегистрироваться' : 'Уже есть аккаунт? Войти'}
+        <div style={{ marginTop: 20, fontSize: 14, color: '#aaa' }}>
+          {isLogin ? 'Нет аккаунта? ' : 'Уже есть аккаунт? '}
+          <span 
+            onClick={() => { setIsLogin(!isLogin); setError(null); }} 
+            style={{ color: '#f0c674', cursor: 'pointer', fontWeight: 'bold' }}
+          >
+            {isLogin ? 'Зарегистрироваться' : 'Войти'}
+          </span>
         </div>
-      </form>
+      </div>
     </div>
   );
 }
