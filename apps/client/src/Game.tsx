@@ -347,7 +347,7 @@ const DiceRollScreen = ({ gameState }: { gameState: any }) => {
   );
 };
 
-export function Game({ socket, roomId, setRoomId, username, openDevConsole, onExit }: { socket: Socket, roomId: string, setRoomId: any, username: string, openDevConsole?: () => void, onExit: () => void }) {
+export function Game({ socket, roomId, setRoomId, username, openDevConsole, onExit }: { socket: Socket, roomId: string, setRoomId: any, username: string, openDevConsole?: () => void, onExit: (state?: any) => void }) {
   const [gameState, setGameState] = useState<any>(null);
   const [selectedCards, setSelectedCards] = useState<any[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -458,7 +458,7 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole, onEx
           <div style={{ fontSize: 60, marginBottom: 20 }}>⏳</div><h2 style={{ color: '#f0c674', margin: '0 0 20px 0' }}>Ожидание игроков...</h2>
           <p style={{ color: '#ccc', marginBottom: 20 }}>Отправьте ID комнаты другу, чтобы он присоединился</p>
           <div style={{ background: '#1a1a2e', padding: 15, borderRadius: 8, fontSize: 24, fontWeight: 'bold', letterSpacing: 3, color: '#f0c674', marginBottom: 20 }}>{roomId}</div>
-          <button onClick={() => { playSound('click'); onExit(); }} style={{ padding: '12px 30px', background: 'transparent', color: '#f44336', border: '1px solid #f44336', borderRadius: 8, fontSize: 16, cursor: 'pointer', width: '100%' }}>Отменить</button>
+          <button onClick={() => { playSound('click'); onExit(gameState); }} style={{ padding: '12px 30px', background: 'transparent', color: '#f44336', border: '1px solid #f44336', borderRadius: 8, fontSize: 16, cursor: 'pointer', width: '100%' }}>Отменить</button>
         </div>
       </div>
     );
@@ -520,7 +520,7 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole, onEx
             </div>
             <div style={{ fontSize: 12, color: '#666', marginTop: 15 }}>Тот, у кого меньше баллов, играет лучше! (Зеленый)</div>
           </div>
-          {isFinished ? <button onClick={() => { playSound('click'); onExit(); }} style={{ padding: '15px 40px', background: titleColor, border: 'none', borderRadius: 8, fontSize: 20, fontWeight: 'bold', cursor: 'pointer', color: titleColor === '#ffd700' ? '#000' : '#fff' }}>Выйти в лобби</button> : <button onClick={() => { playSound('click'); socket.emit('next_round', roomId); }} style={{ padding: '15px 40px', background: '#f0c674', border: 'none', borderRadius: 8, fontSize: 20, fontWeight: 'bold', cursor: 'pointer' }}>Следующий кон</button>}
+          {isFinished ? <button onClick={() => { playSound('click'); onExit(gameState); }} style={{ padding: '15px 40px', background: titleColor, border: 'none', borderRadius: 8, fontSize: 20, fontWeight: 'bold', cursor: 'pointer', color: titleColor === '#ffd700' ? '#000' : '#fff' }}>Выйти в лобби</button> : <button onClick={() => { playSound('click'); socket.emit('next_round', roomId); }} style={{ padding: '15px 40px', background: '#f0c674', border: 'none', borderRadius: 8, fontSize: 20, fontWeight: 'bold', cursor: 'pointer' }}>Следующий кон</button>}
         </div>
       </div>
     );
@@ -652,7 +652,6 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole, onEx
             </div>
             <div style={{ justifySelf: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <div style={{ position: 'relative', width: '100px', height: '105px' }}>
-                {/* 🔽 ИСПРАВЛЕНО: deckCount вместо deckSize 🔽 */}
                 {gameState.deckCount > 0 && (
                   <div className="carpet-card-back" style={{ 
                     position: 'absolute', top: 0, left: 0, width: '70px', height: '105px', 
@@ -665,7 +664,6 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole, onEx
                   </div>
                 )}
               </div>
-              {/* 🔽 ИСПРАВЛЕНО: deckCount вместо deckSize 🔽 */}
               <div style={{ color: 'white', marginTop: '15px', background: 'rgba(0,0,0,0.6)', padding: '2px 10px', borderRadius: '10px' }}>В колоде: {gameState.deckCount}</div>
             </div>
             <div style={{ justifySelf: 'end', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -740,7 +738,7 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole, onEx
               <div style={{ color: '#aaa', alignSelf: 'center', fontSize: 14 }}>Выделите ровно {required} карт(ы) для отбоя или сброса</div>
             )}
             
-            <button onClick={() => { playSound('click'); onExit(); }} style={{ marginLeft: '20px', padding: '10px 20px', background: 'transparent', color: '#aaa', border: '1px solid #555', borderRadius: '8px', cursor: 'pointer' }}>Выйти</button>
+            <button onClick={() => { playSound('click'); onExit(gameState); }} style={{ marginLeft: '20px', padding: '10px 20px', background: 'transparent', color: '#aaa', border: '1px solid #555', borderRadius: '8px', cursor: 'pointer' }}>Выйти</button>
           </div>
         </div>
       </div>

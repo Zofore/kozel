@@ -41,7 +41,6 @@ async function main() {
     try {
       const hash = await bcrypt.hash(password, 10);
       const newId = users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1;
-      
       users.push({ id: newId, username, password: hash, fullname, email, avatar: '', status: 'В сети', friends: [], friendRequests: [], wins: 0, losses: 0 });
       await db.saveUsers(users);
       return { success: true };
@@ -59,7 +58,6 @@ async function main() {
     return { success: true, token, user: { username: user.username, fullname: user.fullname, avatar: user.avatar || '', status: user.status || 'В сети', friends: user.friends || [], wins: user.wins || 0, losses: user.losses || 0 } };
   });
 
-  // 🛡️ НОВЫЙ РОУТ: Получение актуальной статистики для игрока
   app.get('/api/user/profile/:username', async (req, reply) => {
     const { username } = req.params as any;
     const users = await db.getUsers();
@@ -519,17 +517,20 @@ async function main() {
       rooms.set(roomId, currentState); broadcastState(io, roomId, currentState); 
       if (currentState.phase === 'playing') startTurnTimer(io, roomId); 
       else if (currentState.phase === 'finished') {
+        // ФОНОВОЕ СОХРАНЕНИЕ СТАТИСТИКИ
         if (!currentState.settled) {
-          const users = await db.getUsers();
-          const p1Name = currentState.players[0]?.name;
-          const p2Name = currentState.players[1]?.name;
-          const p1 = users.find(u => u.username === p1Name);
-          const p2 = users.find(u => u.username === p2Name);
-          if (p1 && p2) {
-            if (currentState.matchScore.A >= 24) { p2.wins = (p2.wins || 0) + 1; p1.losses = (p1.losses || 0) + 1; }
-            else if (currentState.matchScore.B >= 24) { p1.wins = (p1.wins || 0) + 1; p2.losses = (p2.losses || 0) + 1; }
-            await db.saveUsers(users);
-          }
+          db.getUsers().then(users => {
+            const p1Name = currentState.players[0]?.name;
+            const p2Name = currentState.players[1]?.name;
+            const p1 = users.find(u => u.username === p1Name);
+            const p2 = users.find(u => u.username === p2Name);
+            if (p1 && p2) {
+              if (currentState.matchScore.A >= 24) { p2.wins = (p2.wins || 0) + 1; p1.losses = (p1.losses || 0) + 1; }
+              else if (currentState.matchScore.B >= 24) { p1.wins = (p1.wins || 0) + 1; p2.losses = (p2.losses || 0) + 1; }
+              db.saveUsers(users).catch(console.error);
+            }
+          }).catch(console.error);
+          
           currentState.settled = true;
           rooms.set(roomId, currentState);
         }

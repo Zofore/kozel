@@ -189,20 +189,6 @@ export function App() {
     setDevConsoleOpen(false);
   };
 
-  // 🛡️ НОВАЯ ФУНКЦИЯ: Обновляем статистику из БД и выходим в лобби
-  const handleExitToLobby = async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/user/profile/${user.username}`);
-      if (res.ok) {
-        const data = await res.json();
-        setUser((prev: any) => ({ ...prev, wins: data.wins, losses: data.losses }));
-      }
-    } catch (e) {
-      console.error("Не удалось обновить статистику", e);
-    }
-    setRoomId(null);
-  };
-
   const updateProfile = async (status: string, avatar: string) => {
     await fetch(`${API_URL}/api/user/update`, {
       method: 'POST',
@@ -222,6 +208,37 @@ export function App() {
     socket.emit('create_dev_room', (res: { roomId: string }) => {
       setRoomId(res.roomId);
     });
+  };
+
+  // 🔽 МГНОВЕННЫЙ ВЫХОД И ОБНОВЛЕНИЕ СТАТИСТИКИ 🔽
+  const handleExitToLobby = (finalState?: any) => {
+    if (finalState && finalState.phase === 'finished') {
+      const mySide = finalState.players[finalState.me]?.side;
+      const amIWinner = (finalState.matchScore.A >= 24 && mySide === 'B') || (finalState.matchScore.B >= 24 && mySide === 'A');
+      
+      setUser((prev: any) => {
+        const newUser = { ...prev };
+        if (amIWinner) newUser.wins = (newUser.wins || 0) + 1;
+        else newUser.losses = (newUser.losses || 0) + 1;
+        localStorage.setItem('kozel_user', JSON.stringify(newUser));
+        return newUser;
+      });
+    }
+    
+    setRoomId(null);
+
+    fetch(`${API_URL}/api/user/profile/${user.username}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data) {
+          setUser((prev: any) => {
+            const updated = { ...prev, wins: data.wins, losses: data.losses };
+            localStorage.setItem('kozel_user', JSON.stringify(updated));
+            return updated;
+          });
+        }
+      })
+      .catch(() => console.log('Фоновое обновление статистики не удалось'));
   };
 
   if (!user) return <Auth onAuth={handleAuth} />;
