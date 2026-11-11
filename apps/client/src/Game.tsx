@@ -652,7 +652,8 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole, onEx
             </div>
             <div style={{ justifySelf: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <div style={{ position: 'relative', width: '100px', height: '105px' }}>
-                {gameState.deckSize > 0 && (
+                {/* 🔽 ИСПРАВЛЕНО: deckCount вместо deckSize 🔽 */}
+                {gameState.deckCount > 0 && (
                   <div className="carpet-card-back" style={{ 
                     position: 'absolute', top: 0, left: 0, width: '70px', height: '105px', 
                     boxShadow: '0 10px 15px rgba(0,0,0,0.6)' 
@@ -664,7 +665,8 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole, onEx
                   </div>
                 )}
               </div>
-              <div style={{ color: 'white', marginTop: '15px', background: 'rgba(0,0,0,0.6)', padding: '2px 10px', borderRadius: '10px' }}>В колоде: {gameState.deckSize}</div>
+              {/* 🔽 ИСПРАВЛЕНО: deckCount вместо deckSize 🔽 */}
+              <div style={{ color: 'white', marginTop: '15px', background: 'rgba(0,0,0,0.6)', padding: '2px 10px', borderRadius: '10px' }}>В колоде: {gameState.deckCount}</div>
             </div>
             <div style={{ justifySelf: 'end', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '10px', color: gameState.players[1]?.name === DEV_NAME ? undefined : '#ccc' }} className={gameState.players[1]?.name === DEV_NAME ? 'dev-nick' : ''}>
