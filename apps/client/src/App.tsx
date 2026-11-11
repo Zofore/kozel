@@ -9,7 +9,9 @@ import { Friends } from './Friends';
 import { MenuBackground } from './MenuBackground';
 import { DevConsole } from './DevConsole';
 
-const socket: Socket = io('http://localhost:3005', { auth: { token: localStorage.getItem('kozel_token') } });
+// ⚠️ ВАЖНО: Здесь ссылка на твой сервер в облаке ONREZA. 
+// Если ссылка отличается, замени её на свою из панели ONREZA.
+const socket: Socket = io('https://kozel-server-zofore-4jhk.onreza.app', { auth: { token: localStorage.getItem('kozel_token') } });
 const DEV_NAME = 'Vladislav';
 
 const toastStyles = `
@@ -185,7 +187,7 @@ export function App() {
   };
 
   const updateProfile = async (status: string, avatar: string) => {
-    await fetch('http://localhost:3005/api/user/update', {
+    await fetch('https://kozel-server-zofore-4jhk.onreza.app/api/user/update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: user.username, status, avatar })
