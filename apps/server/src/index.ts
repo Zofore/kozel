@@ -6,7 +6,7 @@ import jwt from 'jsonwebtoken';
 import { db } from './db';
 
 const app = Fastify({ logger: true });
-const PORT = 3005;
+const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3005;
 const rooms = new Map<string, GameState>();
 const playersInRoom = new Map<string, string[]>();
 const turnTimers = new Map<string, NodeJS.Timeout>();
@@ -40,7 +40,6 @@ async function main() {
 
     try {
       const hash = await bcrypt.hash(password, 10);
-      // Находим максимальный ID, чтобы не сломать последовательность при удалении
       const newId = users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1;
       
       users.push({ id: newId, username, password: hash, fullname, email, avatar: '', status: 'В сети', friends: [], friendRequests: [], wins: 0, losses: 0 });
@@ -143,7 +142,7 @@ async function main() {
   });
 
   await app.listen({ port: PORT, host: '0.0.0.0' });
-  console.log('Server started on http://localhost:' + PORT);
+  console.log('Server started on port ' + PORT);
 
   const io = new Server(app.server, { cors: { origin: '*' } });
 
@@ -181,14 +180,13 @@ async function main() {
       
       if (!hand || hand.length === 0) {
         const res = applyEvent(currentRoom, { type: 'PASS', player: player as any, cards: [] });
-        if (res.ok) {
-           let state = res.state;
-           if (state.trick === null && state.lastTrickWinner !== null) {
-             const drawRes = applyEvent(state, { type: 'DRAW', winner: state.lastTrickWinner });
-             if (drawRes.ok) state = drawRes.state;
-           }
-           rooms.set(roomId, state); await checkAndBroadcast(io, roomId, state);
+        if (!res.ok) return;
+        let state = res.state;
+        if (state.trick === null && state.lastTrickWinner !== null) {
+          const drawRes = applyEvent(state, { type: 'DRAW', winner: state.lastTrickWinner });
+          if (drawRes.ok) state = drawRes.state;
         }
+        rooms.set(roomId, state); await checkAndBroadcast(io, roomId, state);
         return;
       }
 
@@ -445,8 +443,10 @@ async function main() {
       }
       
       const res = applyEvent(room, { type: 'ATTACK', player: playerIndex as any, cards });
-      if (res.ok) { rooms.set(roomId, res.state); await checkAndBroadcast(io, roomId, res.state); }
-      else { socket.emit('error', `Ошибка: ${res.error}`); }
+      if (!res.ok) { socket.emit('error', `Ошибка: ${res.error}`); return; }
+      
+      rooms.set(roomId, res.state); 
+      await checkAndBroadcast(io, roomId, res.state);
     });
 
     socket.on('pass_or_beat', async (roomId: string, action: 'beat' | 'pass', cards: any[]) => {
@@ -457,16 +457,16 @@ async function main() {
         ? applyEvent(room, { type: 'BEAT', player: playerIndex as any, cards })
         : applyEvent(room, { type: 'PASS', player: playerIndex as any, cards });
         
-      if (res.ok) {
-        let state = res.state;
-        if (state.trick === null && state.lastTrickWinner !== null) {
-          const drawRes = applyEvent(state, { type: 'DRAW', winner: state.lastTrickWinner });
-          if (drawRes.ok) state = drawRes.state;
-        }
-        rooms.set(roomId, state); await checkAndBroadcast(io, roomId, state);
-      } else {
-        socket.emit('error', `Ошибка: ${res.error}`);
+      if (!res.ok) { socket.emit('error', `Ошибка: ${res.error}`); return; }
+
+      let state = res.state;
+      if (state.trick === null && state.lastTrickWinner !== null) {
+        const drawRes = applyEvent(state, { type: 'DRAW', winner: state.lastTrickWinner });
+        if (drawRes.ok) state = drawRes.state;
       }
+      
+      rooms.set(roomId, state); 
+      await checkAndBroadcast(io, roomId, state);
     });
 
     socket.on('admin_get_rooms', async () => {
