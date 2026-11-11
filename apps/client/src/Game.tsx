@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
 import { Socket } from 'socket.io-client';
+import { motion, LayoutGroup } from 'framer-motion';
 
 const DEV_NAME = 'Vladislav';
 const SUIT_MAP: any = { '♠': 'S', '♥': 'H', '♦': 'D', '♣': 'C' };
@@ -193,7 +194,6 @@ const floatingEmojiStyle = `
 .secret-text { color: #ffd700; font-size: 42px; font-weight: bold; margin-top: 30px; animation: secretGlowPulse 1.5s ease-in-out infinite; text-align: center; padding: 0 20px; letter-spacing: 2px; }
 .secret-subtext { color: #fff; font-size: 20px; margin-top: 20px; opacity: 0.8; }
 
-/* 🃏 НОВЫЙ КОВРОВЫЙ ДИЗАЙН РУБАШКИ */
 @keyframes carpetShine {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
@@ -276,7 +276,6 @@ const CardView = memo(({ card, onClick, selected, small, faceDown, className, is
       )}
       {faceDown && isDevCard && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#ffd700', fontSize: 24, fontWeight: 'bold' }}>DEV</div>}
       
-      {/* 🔽 ЗДЕСЬ НАШ НОВЫЙ КОВРОВЫЙ ДИЗАЙН 🔽 */}
       {isCarpet && (
         <div className="carpet-card-back" style={{ width: '100%', height: '100%' }}>
           <div style={{
@@ -543,198 +542,207 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole, onEx
   const required = gameState.trick?.required || gameState.trick?.cardsOnTable?.length || 1;
 
   return (
-    <div onClick={unlockAudio} style={{
-      display: 'flex', flexDirection: 'column', height: '100vh',
-      background: '#1a1a2e', position: 'relative', overflow: 'hidden',
-      transform: isReversed ? 'rotate(180deg)' : 'none',
-      transition: 'transform 0.6s ease-in-out',
-    }}>
-      <style>{floatingEmojiStyle}</style>
-      {floatingEmojis.map(e => <div key={e.id} className="floating-emoji" style={{ left: `${e.left}%` }}>{e.emoji}</div>)}
-      {rainEmojis.map(e => <div key={e.id} className="rain-emoji" style={{ left: `${e.left}%`, animationDuration: `${e.duration}s` }}>{e.emoji}</div>)}
-      {goldEmojis.map(g => <div key={g.id} className="gold-emoji" style={{ left: `${g.left}%`, animationDuration: `${g.duration}s`, fontSize: g.size }}>{g.emoji}</div>)}
+    <LayoutGroup>
+      <div onClick={unlockAudio} style={{
+        display: 'flex', flexDirection: 'column', height: '100vh',
+        background: '#1a1a2e', position: 'relative', overflow: 'hidden',
+        transform: isReversed ? 'rotate(180deg)' : 'none',
+        transition: 'transform 0.6s ease-in-out',
+      }}>
+        <style>{floatingEmojiStyle}</style>
+        {floatingEmojis.map(e => <div key={e.id} className="floating-emoji" style={{ left: `${e.left}%` }}>{e.emoji}</div>)}
+        {rainEmojis.map(e => <div key={e.id} className="rain-emoji" style={{ left: `${e.left}%`, animationDuration: `${e.duration}s` }}>{e.emoji}</div>)}
+        {goldEmojis.map(g => <div key={g.id} className="gold-emoji" style={{ left: `${g.left}%`, animationDuration: `${g.duration}s`, fontSize: g.size }}>{g.emoji}</div>)}
 
-      {secretFx && <div className="secret-overlay"><div className="secret-crown">👑</div><div className="secret-text">Создатель наблюдает за вами...</div><div className="secret-subtext">Удачи, смертные! 🃏</div></div>}
+        {secretFx && <div className="secret-overlay"><div className="secret-crown">👑</div><div className="secret-text">Создатель наблюдает за вами...</div><div className="secret-subtext">Удачи, смертные! 🃏</div></div>}
 
-      {devJoinAlert && (
-        <div className="dev-join-alert" style={{ position: 'fixed', top: '30%', left: '50%', transform: 'translateX(-50%)', background: 'linear-gradient(135deg, #1a1a2e, #2a2410)', border: '3px solid #ffd700', borderRadius: 20, padding: '30px 60px', zIndex: 9999, textAlign: 'center', color: 'white', pointerEvents: 'none' }}>
-          <div style={{ fontSize: 60, marginBottom: 10 }}>👑</div><div style={{ fontSize: 28, fontWeight: 'bold', color: '#ffd700', textShadow: '0 0 20px rgba(255,215,0,0.8)' }}>{devNameDisplay(devJoinAlert)} вошёл в игру!</div>
-        </div>
-      )}
-
-      {trumpAlert && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-          <h1 style={{ color: '#f0c674', fontSize: 48, marginBottom: 40 }}>Козырь сменился!</h1>
-          <div style={{ transform: 'scale(2)' }}><CardView card={trumpAlert} className="animate-fly-to-table" /></div>
-        </div>
-      )}
-
-      <div style={{ position: 'absolute', bottom: 20, right: 20, zIndex: 100 }}>
-        {chatOpen ? (
-          <div style={{ width: 300, height: 400, background: '#252540', borderRadius: 12, border: '2px solid #f0c674', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 30px rgba(0,0,0,0.8)' }}>
-            <div style={{ padding: 10, background: '#1a1a2e', borderTopLeftRadius: 10, borderTopRightRadius: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #444' }}>
-              <span style={{ fontWeight: 'bold', color: '#f0c674' }}>💬 Чат</span>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                {isDev && openDevConsole && <button onClick={openDevConsole} title="Dev Console" style={{ background: 'transparent', border: 'none', color: '#ffd700', cursor: 'pointer', fontSize: 16 }}>🛠️</button>}
-                <button onClick={() => { playSound('click'); setChatOpen(false); }} style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', fontSize: 18 }}>✖</button>
-              </div>
-            </div>
-            {isDev && (
-              <div style={{ padding: '6px 10px', background: 'rgba(255,215,0,0.1)', borderBottom: '1px solid #333', fontSize: 11, color: '#ffd700', lineHeight: 1.4 }}>
-                ⚙️ <b>Игровые:</b> /kick [ник] · /rain · /stats · /reset · /secret
-              </div>
-            )}
-            <div style={{ flex: 1, padding: 10, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {messages.map((m, i) => (
-                <div key={i} style={{ fontSize: 14 }}>
-                  <span style={{ color: m.sender === 'СИСТЕМА' ? '#ff9800' : m.sender === 'DEBUG' ? '#4caf50' : (m.sender === DEV_NAME ? undefined : (m.sender === username ? '#4caf50' : '#f0c674')), fontWeight: 'bold' }} className={m.sender === DEV_NAME ? 'dev-nick' : ''}>{m.sender === DEV_NAME && '👑 '}{m.sender}: </span>
-                  <span style={{ color: m.sender === 'DEBUG' ? '#4caf50' : '#fff', fontSize: m.sender === 'DEBUG' ? 12 : 14 }}>{m.text}</span><span style={{ color: '#666', fontSize: 10, marginLeft: 5 }}>{m.time}</span>
-                </div>
-              ))}
-              <div ref={chatEndRef} />
-            </div>
-            {emojiPickerOpen && (
-              <div style={{ padding: 10, background: '#1a1a2e', display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center', borderTop: '1px solid #444' }}>
-                {['👍', '😂', '😡', '😭', '❤️', '🔥', '🤡', '🤔'].map(emoji => (
-                  <button key={emoji} onClick={() => sendEmoji(emoji)} style={{ background: 'transparent', border: 'none', fontSize: 24, cursor: 'pointer', padding: 5, transition: 'transform 0.1s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.3)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>{emoji}</button>
-                ))}
-              </div>
-            )}
-            <div style={{ display: 'flex', borderTop: '1px solid #444', alignItems: 'center', paddingRight: 5 }}>
-              <button type="button" onClick={() => { playSound('click'); setEmojiPickerOpen(!emojiPickerOpen); }} style={{ padding: '0 10px', background: 'transparent', border: 'none', fontSize: 20, cursor: 'pointer', color: emojiPickerOpen ? '#f0c674' : '#aaa' }}>😀</button>
-              <form onSubmit={(e) => { playSound('click'); sendMessage(e); }} style={{ display: 'flex', flex: 1, padding: 10 }}>
-                <input value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder={isDev ? "Команда или сообщение..." : "Сообщение..."} style={{ flex: 1, padding: 8, borderRadius: 6, border: '1px solid #555', background: '#1a1a2e', color: 'white', outline: 'none' }} />
-                <button type="submit" style={{ marginLeft: 5, padding: '8px 12px', background: '#f0c674', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 'bold' }}>▶</button>
-              </form>
-            </div>
+        {devJoinAlert && (
+          <div className="dev-join-alert" style={{ position: 'fixed', top: '30%', left: '50%', transform: 'translateX(-50%)', background: 'linear-gradient(135deg, #1a1a2e, #2a2410)', border: '3px solid #ffd700', borderRadius: 20, padding: '30px 60px', zIndex: 9999, textAlign: 'center', color: 'white', pointerEvents: 'none' }}>
+            <div style={{ fontSize: 60, marginBottom: 10 }}>👑</div><div style={{ fontSize: 28, fontWeight: 'bold', color: '#ffd700', textShadow: '0 0 20px rgba(255,215,0,0.8)' }}>{devNameDisplay(devJoinAlert)} вошёл в игру!</div>
           </div>
-        ) : (
-          <button onClick={() => { playSound('click'); setChatOpen(true); }} style={{ width: 60, height: 60, borderRadius: '50%', background: '#f0c674', border: 'none', fontSize: 24, cursor: 'pointer', boxShadow: '0 4px 10px rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>💬</button>
         )}
-      </div>
 
-      <div style={{ background: '#252540', padding: '15px 30px', display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', borderBottom: '2px solid #444' }}>
-        <div style={{ justifySelf: 'start', display: 'flex', alignItems: 'center', gap: 15 }}>
-          <div style={{ color: '#f0c674', fontSize: '18px', fontWeight: 'bold' }}>ID: {roomId}</div>
-          {isDev && openDevConsole && <button onClick={openDevConsole} title="Dev Console (` тильда)" style={{ background: 'transparent', border: '1px solid #ffd700', color: '#ffd700', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', gap: 4 }}>🛠️ Dev</button>}
-        </div>
-        <div style={{ justifySelf: 'center', display: 'flex', alignItems: 'center', gap: '15px' }}>
-           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-             <div className={gameState.players[0]?.name === DEV_NAME ? 'dev-avatar-frame' : ''}><img src={getAvatar(gameState.players[0]?.name)} style={{ width: 30, height: 30, borderRadius: '50%', background: '#fff', border: gameState.players[0]?.name === DEV_NAME ? 'none' : 'none' }} /></div>
-             <span className={gameState.players[0]?.name === DEV_NAME ? 'dev-nick' : ''} style={{ color: gameState.players[0]?.name === DEV_NAME ? undefined : 'white', fontWeight: 'bold' }}>{gameState.players[0]?.name === DEV_NAME && '👑 '}{gameState.players[0]?.name}</span>
-           </div>
-           <span style={{ color: '#f0c674', fontWeight: 'bold' }}>VS</span>
-           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-             <span className={gameState.players[1]?.name === DEV_NAME ? 'dev-nick' : ''} style={{ color: gameState.players[1]?.name === DEV_NAME ? undefined : 'white', fontWeight: 'bold' }}>{gameState.players[1]?.name === DEV_NAME && '👑 '}{gameState.players[1]?.name}</span>
-             <div className={gameState.players[1]?.name === DEV_NAME ? 'dev-avatar-frame' : ''}><img src={getAvatar(gameState.players[1]?.name)} style={{ width: 30, height: 30, borderRadius: '50%', background: '#fff' }} /></div>
-           </div>
-        </div>
-        <div style={{ justifySelf: 'end', display: 'flex', gap: 20 }}>
-          <div style={{ color: timeLeft <= 5 ? '#f44336' : 'white', fontSize: '18px', fontWeight: timeLeft <= 5 ? 'bold' : 'normal' }}>Кон: {gameState.roundNumber || 1} | ⏱ {timeLeft}с</div>
-          <div style={{ color: '#f0c674', fontSize: '18px', fontWeight: 'bold' }}>Козырь: {gameState.trump}</div>
-        </div>
-      </div>
-
-      <div className="felt-table" style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', padding: '20px 40px', alignItems: 'flex-start' }}>
-          <div style={{ justifySelf: 'start', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '10px', color: gameState.players[0]?.name === DEV_NAME ? undefined : '#ccc' }} className={gameState.players[0]?.name === DEV_NAME ? 'dev-nick' : ''}>
-               <img src={getAvatar(gameState.players[0]?.name)} style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff' }} />{gameState.players[0]?.name === DEV_NAME && '👑 '}{gameState.players[0]?.name}
-            </div>
-            <div style={{ position: 'relative', width: '60px', height: '90px' }}>
-              {Array.from({ length: gameState.bitaCount?.A || 0 }).map((_, i) => (
-                <div key={i} style={{ position: 'absolute', top: Math.min(i * 1.5, 20), left: Math.min(i * 1.5, 20) }}>
-                  <CardView card={{ suit: '♠', rank: '6' }} small faceDown={true} isDevCard={gameState.players[0]?.name === DEV_NAME} />
-                </div>
-              ))}
-              {(!gameState.bitaCount?.A || gameState.bitaCount.A === 0) && <div style={{ width: '50px', height: '75px', border: '2px dashed #666', borderRadius: '8px', position: 'absolute' }} />}
-            </div>
+        {trumpAlert && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+            <h1 style={{ color: '#f0c674', fontSize: 48, marginBottom: 40 }}>Козырь сменился!</h1>
+            <div style={{ transform: 'scale(2)' }}><CardView card={trumpAlert} className="animate-fly-to-table" /></div>
           </div>
-          <div style={{ justifySelf: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <div style={{ position: 'relative', width: '100px', height: '105px' }}>
-              {/* 🔽 НОВАЯ КОВРОВАЯ РУБАШКА ДЛЯ КОЛОДЫ 🔽 */}
-              {gameState.deckSize > 0 && (
-                <div className="carpet-card-back" style={{ 
-                  position: 'absolute', top: 0, left: 0, width: '70px', height: '105px', 
-                  boxShadow: '0 10px 15px rgba(0,0,0,0.6)' 
-                }} />
-              )}
-              {gameState.trumpCard && (
-                <div style={{ position: 'absolute', top: 15, left: 30, transform: 'rotate(90deg) translateZ(0)', zIndex: 2, willChange: 'transform', pointerEvents: 'none' }}>
-                  <CardView card={gameState.trumpCard} />
-                </div>
-              )}
-            </div>
-            <div style={{ color: 'white', marginTop: '15px', background: 'rgba(0,0,0,0.6)', padding: '2px 10px', borderRadius: '10px' }}>В колоде: {gameState.deckSize}</div>
-          </div>
-          <div style={{ justifySelf: 'end', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '10px', color: gameState.players[1]?.name === DEV_NAME ? undefined : '#ccc' }} className={gameState.players[1]?.name === DEV_NAME ? 'dev-nick' : ''}>
-               <img src={getAvatar(gameState.players[1]?.name)} style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff' }} />{gameState.players[1]?.name === DEV_NAME && '👑 '}{gameState.players[1]?.name}
-            </div>
-            <div style={{ position: 'relative', width: '60px', height: '90px' }}>
-              {Array.from({ length: gameState.bitaCount?.B || 0 }).map((_, i) => (
-                <div key={i} style={{ position: 'absolute', top: Math.min(i * 1.5, 20), left: Math.min(i * 1.5, 20) }}>
-                  <CardView card={{ suit: '♠', rank: '6' }} small faceDown={true} isDevCard={gameState.players[1]?.name === DEV_NAME} />
-                </div>
-              ))}
-              {(!gameState.bitaCount?.B || gameState.bitaCount.B === 0) && <div style={{ width: '50px', height: '75px', border: '2px dashed #666', borderRadius: '8px', position: 'absolute' }} />}
-            </div>
-          </div>
-        </div>
+        )}
 
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-          {gameState.trick ? (
-             <>
-               <div style={{ color: '#ccc', fontSize: '18px', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(0,0,0,0.4)', padding: '5px 15px', borderRadius: '20px' }}>
-                 Ходил: <span className={gameState.players[gameState.trick.attacker]?.name === DEV_NAME ? 'dev-nick' : ''} style={{ color: gameState.players[gameState.trick.attacker]?.name === DEV_NAME ? undefined : '#f0c674', fontWeight: 'bold' }}>{gameState.players[gameState.trick.attacker]?.name === DEV_NAME && '👑 '}{gameState.players[gameState.trick.attacker]?.name}</span>
-                 <div className={gameState.players[gameState.trick.attacker]?.name === DEV_NAME ? 'dev-avatar-frame' : ''}><img src={getAvatar(gameState.players[gameState.trick.attacker]?.name)} style={{ width: 25, height: 25, borderRadius: '50%', background: '#fff' }} /></div>
-               </div>
-               <div style={{ display: 'flex', paddingLeft: '20px' }}>
-                 {gameState.trick.cardsOnTable.map((card: any, i: number) => (
-                   <div key={i} style={{ marginLeft: '-20px', zIndex: i }}><CardView card={card} className="animate-fly-to-table" /></div>
-                 ))}
-               </div>
-             </>
-          ) : <div style={{ color: 'rgba(255,255,255,0.2)', fontSize: '24px', fontWeight: 'bold' }}>Ожидание хода...</div>}
-        </div>
-      </div>
-
-      <div style={{ background: '#1a1a2e', padding: '15px', borderTop: '2px solid #444', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        {errorMsg && <div style={{ background: '#d32f2f', padding: '10px', borderRadius: '8px', marginBottom: '15px', fontWeight: 'bold' }}>{errorMsg}</div>}
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '15px', minHeight: '120px' }}>
-          {gameState.hand.map((card: any, index: number) => {
-            const isSelected = selectedCards.some(c => c.suit === card.suit && c.rank === card.rank);
-            const cardStr = `${card.rank}_${SUIT_MAP[card.suit]}`;
-            const isLegal = gameState.legalMoves?.some((move: string[]) => move.includes(cardStr));
-            return (
-              <div key={card.rank + card.suit} className="animate-deal" style={{ animationDelay: `${index * 0.05}s` }}>
-                <CardView card={card} selected={isSelected} onClick={() => toggleCard(card)} isLegal={isLegal} />
+        <div style={{ position: 'absolute', bottom: 20, right: 20, zIndex: 100 }}>
+          {chatOpen ? (
+            <div style={{ width: 300, height: 400, background: '#252540', borderRadius: 12, border: '2px solid #f0c674', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 30px rgba(0,0,0,0.8)' }}>
+              <div style={{ padding: 10, background: '#1a1a2e', borderTopLeftRadius: 10, borderTopRightRadius: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #444' }}>
+                <span style={{ fontWeight: 'bold', color: '#f0c674' }}>💬 Чат</span>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  {isDev && openDevConsole && <button onClick={openDevConsole} title="Dev Console" style={{ background: 'transparent', border: 'none', color: '#ffd700', cursor: 'pointer', fontSize: 16 }}>🛠️</button>}
+                  <button onClick={() => { playSound('click'); setChatOpen(false); }} style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', fontSize: 18 }}>✖</button>
+                </div>
               </div>
-            );
-          })}
+              {isDev && (
+                <div style={{ padding: '6px 10px', background: 'rgba(255,215,0,0.1)', borderBottom: '1px solid #333', fontSize: 11, color: '#ffd700', lineHeight: 1.4 }}>
+                  ⚙️ <b>Игровые:</b> /kick [ник] · /rain · /stats · /reset · /secret
+                </div>
+              )}
+              <div style={{ flex: 1, padding: 10, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {messages.map((m, i) => (
+                  <div key={i} style={{ fontSize: 14 }}>
+                    <span style={{ color: m.sender === 'СИСТЕМА' ? '#ff9800' : m.sender === 'DEBUG' ? '#4caf50' : (m.sender === DEV_NAME ? undefined : (m.sender === username ? '#4caf50' : '#f0c674')), fontWeight: 'bold' }} className={m.sender === DEV_NAME ? 'dev-nick' : ''}>{m.sender === DEV_NAME && '👑 '}{m.sender}: </span>
+                    <span style={{ color: m.sender === 'DEBUG' ? '#4caf50' : '#fff', fontSize: m.sender === 'DEBUG' ? 12 : 14 }}>{m.text}</span><span style={{ color: '#666', fontSize: 10, marginLeft: 5 }}>{m.time}</span>
+                  </div>
+                ))}
+                <div ref={chatEndRef} />
+              </div>
+              {emojiPickerOpen && (
+                <div style={{ padding: 10, background: '#1a1a2e', display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center', borderTop: '1px solid #444' }}>
+                  {['👍', '😂', '😡', '😭', '❤️', '🔥', '🤡', '🤔'].map(emoji => (
+                    <button key={emoji} onClick={() => sendEmoji(emoji)} style={{ background: 'transparent', border: 'none', fontSize: 24, cursor: 'pointer', padding: 5, transition: 'transform 0.1s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.3)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>{emoji}</button>
+                  ))}
+                </div>
+              )}
+              <div style={{ display: 'flex', borderTop: '1px solid #444', alignItems: 'center', paddingRight: 5 }}>
+                <button type="button" onClick={() => { playSound('click'); setEmojiPickerOpen(!emojiPickerOpen); }} style={{ padding: '0 10px', background: 'transparent', border: 'none', fontSize: 20, cursor: 'pointer', color: emojiPickerOpen ? '#f0c674' : '#aaa' }}>😀</button>
+                <form onSubmit={(e) => { playSound('click'); sendMessage(e); }} style={{ display: 'flex', flex: 1, padding: 10 }}>
+                  <input value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder={isDev ? "Команда или сообщение..." : "Сообщение..."} style={{ flex: 1, padding: 8, borderRadius: 6, border: '1px solid #555', background: '#1a1a2e', color: 'white', outline: 'none' }} />
+                  <button type="submit" style={{ marginLeft: 5, padding: '8px 12px', background: '#f0c674', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 'bold' }}>▶</button>
+                </form>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => { playSound('click'); setChatOpen(true); }} style={{ width: 60, height: 60, borderRadius: '50%', background: '#f0c674', border: 'none', fontSize: 24, cursor: 'pointer', boxShadow: '0 4px 10px rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>💬</button>
+          )}
         </div>
-        <div style={{ display: 'flex', gap: '15px', height: '44px', alignItems: 'center', justifyContent: 'center' }}>
-          {isMyTurn && !gameState.trick && selectedCards.length > 0 && (
-            <button onClick={playCards} style={{ padding: '10px 30px', background: '#f0c674', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', color: '#000', boxShadow: '0 4px 0 #b08d40' }}>Сделать ход</button>
-          )}
-          
-          {isMyTurn && gameState.trick && selectedCards.length === required && (
-            <button onClick={beat} style={{ padding: '10px 30px', background: '#4caf50', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', color: '#fff', boxShadow: '0 4px 0 #2e7d32' }}>Перебить</button>
-          )}
 
-          {isMyTurn && gameState.trick && (gameState.trick.attacker === gameState.me || selectedCards.length === required) && (
-            <button onClick={bita} style={{ padding: '10px 30px', background: '#f44336', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', color: '#fff', boxShadow: '0 4px 0 #c62828' }}>Бита (Ваше)</button>
-          )}
-          
-          {!isMyTurn && <div style={{ color: '#555', alignSelf: 'center' }}>Ожидание соперника...</div>}
-          {isMyTurn && gameState.trick && selectedCards.length !== required && gameState.trick.attacker !== gameState.me && (
-             <div style={{ color: '#aaa', alignSelf: 'center', fontSize: 14 }}>Выделите ровно {required} карт(ы) для отбоя или сброса</div>
-          )}
-          
-          <button onClick={() => { playSound('click'); onExit(); }} style={{ marginLeft: '20px', padding: '10px 20px', background: 'transparent', color: '#aaa', border: '1px solid #555', borderRadius: '8px', cursor: 'pointer' }}>Выйти</button>
+        <div style={{ background: '#252540', padding: '15px 30px', display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', borderBottom: '2px solid #444' }}>
+          <div style={{ justifySelf: 'start', display: 'flex', alignItems: 'center', gap: 15 }}>
+            <div style={{ color: '#f0c674', fontSize: '18px', fontWeight: 'bold' }}>ID: {roomId}</div>
+            {isDev && openDevConsole && <button onClick={openDevConsole} title="Dev Console (` тильда)" style={{ background: 'transparent', border: '1px solid #ffd700', color: '#ffd700', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', gap: 4 }}>🛠️ Dev</button>}
+          </div>
+          <div style={{ justifySelf: 'center', display: 'flex', alignItems: 'center', gap: '15px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div className={gameState.players[0]?.name === DEV_NAME ? 'dev-avatar-frame' : ''}><img src={getAvatar(gameState.players[0]?.name)} style={{ width: 30, height: 30, borderRadius: '50%', background: '#fff', border: gameState.players[0]?.name === DEV_NAME ? 'none' : 'none' }} /></div>
+              <span className={gameState.players[0]?.name === DEV_NAME ? 'dev-nick' : ''} style={{ color: gameState.players[0]?.name === DEV_NAME ? undefined : 'white', fontWeight: 'bold' }}>{gameState.players[0]?.name === DEV_NAME && '👑 '}{gameState.players[0]?.name}</span>
+            </div>
+            <span style={{ color: '#f0c674', fontWeight: 'bold' }}>VS</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className={gameState.players[1]?.name === DEV_NAME ? 'dev-nick' : ''} style={{ color: gameState.players[1]?.name === DEV_NAME ? undefined : 'white', fontWeight: 'bold' }}>{gameState.players[1]?.name === DEV_NAME && '👑 '}{gameState.players[1]?.name}</span>
+              <div className={gameState.players[1]?.name === DEV_NAME ? 'dev-avatar-frame' : ''}><img src={getAvatar(gameState.players[1]?.name)} style={{ width: 30, height: 30, borderRadius: '50%', background: '#fff' }} /></div>
+            </div>
+          </div>
+          <div style={{ justifySelf: 'end', display: 'flex', gap: 20 }}>
+            <div style={{ color: timeLeft <= 5 ? '#f44336' : 'white', fontSize: '18px', fontWeight: timeLeft <= 5 ? 'bold' : 'normal' }}>Кон: {gameState.roundNumber || 1} | ⏱ {timeLeft}с</div>
+            <div style={{ color: '#f0c674', fontSize: '18px', fontWeight: 'bold' }}>Козырь: {gameState.trump}</div>
+          </div>
+        </div>
+
+        <div className="felt-table" style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', padding: '20px 40px', alignItems: 'flex-start' }}>
+            <div style={{ justifySelf: 'start', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '10px', color: gameState.players[0]?.name === DEV_NAME ? undefined : '#ccc' }} className={gameState.players[0]?.name === DEV_NAME ? 'dev-nick' : ''}>
+                <img src={getAvatar(gameState.players[0]?.name)} style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff' }} />{gameState.players[0]?.name === DEV_NAME && '👑 '}{gameState.players[0]?.name}
+              </div>
+              <div style={{ position: 'relative', width: '60px', height: '90px' }}>
+                {Array.from({ length: gameState.bitaCount?.A || 0 }).map((_, i) => (
+                  <div key={i} style={{ position: 'absolute', top: Math.min(i * 1.5, 20), left: Math.min(i * 1.5, 20) }}>
+                    <CardView card={{ suit: '♠', rank: '6' }} small faceDown={true} isDevCard={gameState.players[0]?.name === DEV_NAME} />
+                  </div>
+                ))}
+                {(!gameState.bitaCount?.A || gameState.bitaCount.A === 0) && <div style={{ width: '50px', height: '75px', border: '2px dashed #666', borderRadius: '8px', position: 'absolute' }} />}
+              </div>
+            </div>
+            <div style={{ justifySelf: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <div style={{ position: 'relative', width: '100px', height: '105px' }}>
+                {gameState.deckSize > 0 && (
+                  <div className="carpet-card-back" style={{ 
+                    position: 'absolute', top: 0, left: 0, width: '70px', height: '105px', 
+                    boxShadow: '0 10px 15px rgba(0,0,0,0.6)' 
+                  }} />
+                )}
+                {gameState.trumpCard && (
+                  <div style={{ position: 'absolute', top: 15, left: 30, transform: 'rotate(90deg) translateZ(0)', zIndex: 2, willChange: 'transform', pointerEvents: 'none' }}>
+                    <CardView card={gameState.trumpCard} />
+                  </div>
+                )}
+              </div>
+              <div style={{ color: 'white', marginTop: '15px', background: 'rgba(0,0,0,0.6)', padding: '2px 10px', borderRadius: '10px' }}>В колоде: {gameState.deckSize}</div>
+            </div>
+            <div style={{ justifySelf: 'end', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '10px', color: gameState.players[1]?.name === DEV_NAME ? undefined : '#ccc' }} className={gameState.players[1]?.name === DEV_NAME ? 'dev-nick' : ''}>
+                <img src={getAvatar(gameState.players[1]?.name)} style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff' }} />{gameState.players[1]?.name === DEV_NAME && '👑 '}{gameState.players[1]?.name}
+              </div>
+              <div style={{ position: 'relative', width: '60px', height: '90px' }}>
+                {Array.from({ length: gameState.bitaCount?.B || 0 }).map((_, i) => (
+                  <div key={i} style={{ position: 'absolute', top: Math.min(i * 1.5, 20), left: Math.min(i * 1.5, 20) }}>
+                    <CardView card={{ suit: '♠', rank: '6' }} small faceDown={true} isDevCard={gameState.players[1]?.name === DEV_NAME} />
+                  </div>
+                ))}
+                {(!gameState.bitaCount?.B || gameState.bitaCount.B === 0) && <div style={{ width: '50px', height: '75px', border: '2px dashed #666', borderRadius: '8px', position: 'absolute' }} />}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+            {gameState.trick ? (
+              <>
+                <div style={{ color: '#ccc', fontSize: '18px', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(0,0,0,0.4)', padding: '5px 15px', borderRadius: '20px' }}>
+                  Ходил: <span className={gameState.players[gameState.trick.attacker]?.name === DEV_NAME ? 'dev-nick' : ''} style={{ color: gameState.players[gameState.trick.attacker]?.name === DEV_NAME ? undefined : '#f0c674', fontWeight: 'bold' }}>{gameState.players[gameState.trick.attacker]?.name === DEV_NAME && '👑 '}{gameState.players[gameState.trick.attacker]?.name}</span>
+                  <div className={gameState.players[gameState.trick.attacker]?.name === DEV_NAME ? 'dev-avatar-frame' : ''}><img src={getAvatar(gameState.players[gameState.trick.attacker]?.name)} style={{ width: 25, height: 25, borderRadius: '50%', background: '#fff' }} /></div>
+                </div>
+                <div style={{ display: 'flex', paddingLeft: '20px' }}>
+                  {gameState.trick.cardsOnTable.map((card: any, i: number) => (
+                    <motion.div key={i} layoutId={`${card.rank}_${card.suit}`} style={{ marginLeft: '-20px', zIndex: i }}>
+                      <CardView card={card} />
+                    </motion.div>
+                  ))}
+                </div>
+              </>
+            ) : <div style={{ color: 'rgba(255,255,255,0.2)', fontSize: '24px', fontWeight: 'bold' }}>Ожидание хода...</div>}
+          </div>
+        </div>
+
+        <div style={{ background: '#1a1a2e', padding: '15px', borderTop: '2px solid #444', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          {errorMsg && <div style={{ background: '#d32f2f', padding: '10px', borderRadius: '8px', marginBottom: '15px', fontWeight: 'bold' }}>{errorMsg}</div>}
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '15px', minHeight: '120px' }}>
+            {gameState.hand.map((card: any, index: number) => {
+              const isSelected = selectedCards.some(c => c.suit === card.suit && c.rank === card.rank);
+              const cardStr = `${card.rank}_${SUIT_MAP[card.suit]}`;
+              const isLegal = gameState.legalMoves?.some((move: string[]) => move.includes(cardStr));
+              return (
+                <motion.div 
+                  key={card.rank + card.suit} 
+                  layoutId={`${card.rank}_${card.suit}`}
+                  initial={{ y: 100, opacity: 0, rotate: 10 }}
+                  animate={{ y: 0, opacity: 1, rotate: 0 }}
+                  transition={{ type: 'spring', stiffness: 100, delay: index * 0.05 }}
+                >
+                  <CardView card={card} selected={isSelected} onClick={() => toggleCard(card)} isLegal={isLegal} />
+                </motion.div>
+              );
+            })}
+          </div>
+          <div style={{ display: 'flex', gap: '15px', height: '44px', alignItems: 'center', justifyContent: 'center' }}>
+            {isMyTurn && !gameState.trick && selectedCards.length > 0 && (
+              <button onClick={playCards} style={{ padding: '10px 30px', background: '#f0c674', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', color: '#000', boxShadow: '0 4px 0 #b08d40' }}>Сделать ход</button>
+            )}
+            
+            {isMyTurn && gameState.trick && selectedCards.length === required && (
+              <button onClick={beat} style={{ padding: '10px 30px', background: '#4caf50', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', color: '#fff', boxShadow: '0 4px 0 #2e7d32' }}>Перебить</button>
+            )}
+
+            {isMyTurn && gameState.trick && (gameState.trick.attacker === gameState.me || selectedCards.length === required) && (
+              <button onClick={bita} style={{ padding: '10px 30px', background: '#f44336', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', color: '#fff', boxShadow: '0 4px 0 #c62828' }}>Бита (Ваше)</button>
+            )}
+            
+            {!isMyTurn && <div style={{ color: '#555', alignSelf: 'center' }}>Ожидание соперника...</div>}
+            {isMyTurn && gameState.trick && selectedCards.length !== required && gameState.trick.attacker !== gameState.me && (
+              <div style={{ color: '#aaa', alignSelf: 'center', fontSize: 14 }}>Выделите ровно {required} карт(ы) для отбоя или сброса</div>
+            )}
+            
+            <button onClick={() => { playSound('click'); onExit(); }} style={{ marginLeft: '20px', padding: '10px 20px', background: 'transparent', color: '#aaa', border: '1px solid #555', borderRadius: '8px', cursor: 'pointer' }}>Выйти</button>
+          </div>
         </div>
       </div>
-    </div>
+    </LayoutGroup>
   );
 }
 
