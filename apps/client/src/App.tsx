@@ -9,9 +9,8 @@ import { Friends } from './Friends';
 import { MenuBackground } from './MenuBackground';
 import { DevConsole } from './DevConsole';
 
-// ⚠️ ВАЖНО: Здесь ссылка на твой сервер в облаке ONREZA. 
-// Если ссылка отличается, замени её на свою из панели ONREZA.
-const socket: Socket = io('https://kozel-server-zofore-4jhk.onreza.app', { auth: { token: localStorage.getItem('kozel_token') } });
+const API_URL = 'https://kozel-server-zofore-4jhk.onreza.app';
+const socket: Socket = io(API_URL, { auth: { token: localStorage.getItem('kozel_token') }, autoConnect: false });
 const DEV_NAME = 'Vladislav';
 
 const toastStyles = `
@@ -99,6 +98,7 @@ export function App() {
   useEffect(() => {
     if (user) {
       localStorage.setItem('kozel_user', JSON.stringify(user));
+      if (!socket.connected) socket.connect(); // Восстанавливаем соединение при загрузке
       socket.emit('register_online', user.username);
     }
   }, [user]);
@@ -175,11 +175,16 @@ export function App() {
 
   const handleAuth = (token: string, userData: any) => {
     localStorage.setItem('kozel_token', token);
+    // ПРИНУДИТЕЛЬНОЕ ПЕРЕПОДКЛЮЧЕНИЕ С НОВЫМ ТОКЕНОМ
+    socket.auth = { token }; 
+    socket.connect();
+    
     setUser(userData);
   };
 
   const handleLogout = () => {
     localStorage.clear();
+    socket.disconnect(); // Отключаем сокет при выходе
     setUser(null);
     setRoomId(null);
     setView('menu');
@@ -187,7 +192,7 @@ export function App() {
   };
 
   const updateProfile = async (status: string, avatar: string) => {
-    await fetch('https://kozel-server-zofore-4jhk.onreza.app/api/user/update', {
+    await fetch(`${API_URL}/api/user/update`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: user.username, status, avatar })
