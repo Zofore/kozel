@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Socket } from 'socket.io-client';
 import { AdminPanel } from './AdminPanel';
+import { Goat3D } from './Goat3D';
 
 const DEV_NAME = 'Vladislav';
 
@@ -38,23 +39,6 @@ const devStyles = `
   animation: goldShine 3s linear infinite;
   font-weight: bold;
 }
-
-/* 🐐 АНИМАЦИИ ДЛЯ КОЗЛА */
-@keyframes floatGoat {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-6px); }
-}
-@keyframes eyeGlow {
-  0%, 100% { opacity: 1; filter: drop-shadow(0 0 5px #ff0000); }
-  50% { opacity: 0.6; filter: drop-shadow(0 0 12px #ff0000); }
-}
-.goat-icon {
-  animation: floatGoat 3s ease-in-out infinite;
-  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
-}
-.goat-eye {
-  animation: eyeGlow 2s ease-in-out infinite;
-}
 `;
 
 export function Menu({ socket, user, onPlay, onProfile, onFriends, onLogout }: { socket: Socket, user: any, onPlay: () => void, onProfile: () => void, onFriends: () => void, onLogout: () => void }) {
@@ -80,47 +64,10 @@ export function Menu({ socket, user, onPlay, onProfile, onFriends, onLogout }: {
           </div>
         </div>
 
-        {/* 🔽 ШЕДЕВРАЛЬНАЯ ИКОНКА КОЗЛА 🔽 */}
-        <h1 style={{ margin: '0 0 5px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
-          <svg className="goat-icon" width="56" height="56" viewBox="0 0 100 100">
-            <defs>
-              <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#fff8dc" />
-                <stop offset="40%" stopColor="#ffd700" />
-                <stop offset="60%" stopColor="#b8860b" />
-                <stop offset="100%" stopColor="#f0c674" />
-              </linearGradient>
-              <linearGradient id="darkMetal" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#333" />
-                <stop offset="50%" stopColor="#111" />
-                <stop offset="100%" stopColor="#222" />
-              </linearGradient>
-            </defs>
-            
-            {/* Рога */}
-            <path d="M 30 40 C 10 30, 5 10, 20 5 C 30 0, 40 20, 45 30 Z" fill="url(#goldGrad)" stroke="#111" strokeWidth="2" strokeLinejoin="round" />
-            <path d="M 70 40 C 90 30, 95 10, 80 5 C 70 0, 60 20, 55 30 Z" fill="url(#goldGrad)" stroke="#111" strokeWidth="2" strokeLinejoin="round" />
-            
-            {/* Уши */}
-            <path d="M 25 50 C 10 50, 5 60, 15 70 Z" fill="url(#darkMetal)" stroke="#f0c674" strokeWidth="1.5" />
-            <path d="M 75 50 C 90 50, 95 60, 85 70 Z" fill="url(#darkMetal)" stroke="#f0c674" strokeWidth="1.5" />
-
-            {/* Морда (скелет/маска) */}
-            <path d="M 30 40 L 50 35 L 70 40 L 65 80 L 50 95 L 35 80 Z" fill="url(#darkMetal)" stroke="url(#goldGrad)" strokeWidth="3" strokeLinejoin="round" />
-            
-            {/* Нос и пасть */}
-            <path d="M 45 65 L 55 65 L 50 75 Z" fill="#111" stroke="url(#goldGrad)" strokeWidth="1.5" />
-            <path d="M 40 82 L 60 82" stroke="url(#goldGrad)" strokeWidth="2" strokeLinecap="round" />
-
-            {/* Глаза (злые, светящиеся) */}
-            <path className="goat-eye" d="M 35 55 L 45 50 L 47 55 L 37 60 Z" fill="#ff0000" />
-            <path className="goat-eye" d="M 65 55 L 55 50 L 53 55 L 63 60 Z" fill="#ff0000" />
-
-            {/* Борода */}
-            <path d="M 45 95 L 50 115 L 55 95 Z" fill="url(#goldGrad)" opacity="0.8" />
-          </svg>
-
-          <span style={{ color: '#f0c674', fontSize: 32, fontWeight: 900, textShadow: '0 0 15px rgba(240,198,116,0.6)', letterSpacing: '1px' }}>
+        {/* 🔽 3D КОЗЁЛ 🔽 */}
+        <h1 style={{ margin: '0 0 5px 0', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <Goat3D />
+          <span style={{ color: '#f0c674', fontSize: 32, fontWeight: 900, textShadow: '0 0 15px rgba(240,198,116,0.6)', letterSpacing: '1px', marginTop: '-10px' }}>
             Козёл
           </span>
         </h1>
