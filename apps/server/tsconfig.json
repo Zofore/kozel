@@ -5,7 +5,10 @@
     "moduleResolution": "Bundler",
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "noImplicitAny": false
+    "noImplicitAny": false,
+    "paths": {
+      "@kozel/game-core": ["../../packages/game-core/dist/index.d.ts"]
+    }
   },
   "include": ["src/**/*"]
 }
