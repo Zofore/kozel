@@ -192,6 +192,46 @@ const floatingEmojiStyle = `
 .secret-crown { font-size: 200px; animation: secretCrownDrop 1s cubic-bezier(0.175, 0.885, 0.32, 1.275); filter: drop-shadow(0 0 40px rgba(255,215,0,0.8)); }
 .secret-text { color: #ffd700; font-size: 42px; font-weight: bold; margin-top: 30px; animation: secretGlowPulse 1.5s ease-in-out infinite; text-align: center; padding: 0 20px; letter-spacing: 2px; }
 .secret-subtext { color: #fff; font-size: 20px; margin-top: 20px; opacity: 0.8; }
+
+/* 🃏 НОВЫЙ КОВРОВЫЙ ДИЗАЙН РУБАШКИ */
+@keyframes carpetShine {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes carpetGlow {
+  0%, 100% { box-shadow: inset 0 0 15px rgba(0,0,0,0.9), inset 0 0 5px rgba(240,198,116,0.5), 0 4px 10px rgba(0,0,0,0.6), 0 0 10px rgba(240,198,116,0.2); }
+  50% { box-shadow: inset 0 0 15px rgba(0,0,0,0.9), inset 0 0 10px rgba(240,198,116,0.8), 0 4px 10px rgba(0,0,0,0.6), 0 0 20px rgba(240,198,116,0.6); }
+}
+.carpet-card-back {
+  background-color: #5c0a0a;
+  background-image:
+    repeating-linear-gradient(45deg, rgba(240,198,116,0.15) 0, rgba(240,198,116,0.15) 2px, transparent 2px, transparent 8px),
+    repeating-linear-gradient(-45deg, rgba(240,198,116,0.15) 0, rgba(240,198,116,0.15) 2px, transparent 2px, transparent 8px),
+    radial-gradient(circle at 50% 50%, #8b0000 20%, #4a0000 80%);
+  border: 2px solid #f0c674;
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+  animation: carpetGlow 3s infinite ease-in-out;
+}
+.carpet-card-back::before {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border: 1px solid rgba(240,198,116,0.4);
+  border-radius: 4px;
+  pointer-events: none;
+}
+.carpet-card-back::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 20%, rgba(255,255,255,0.2) 40%, rgba(255,255,255,0.5) 50%, rgba(255,255,255,0.2) 60%, transparent 80%);
+  background-size: 200% 100%;
+  animation: carpetShine 4s infinite linear;
+  pointer-events: none;
+}
 `;
 
 const CardView = memo(({ card, onClick, selected, small, faceDown, className, isDevCard, isLegal }: any) => {
@@ -211,15 +251,17 @@ const CardView = memo(({ card, onClick, selected, small, faceDown, className, is
     boxShadow: '0 0 15px #4caf50, 0 0 0 2px #4caf50'
   } : {};
 
+  const isCarpet = faceDown && !isDevCard;
+
   return (
     <div onClick={onClick} className={`card-3d ${className || ''} ${selected ? 'card-selected' : ''}`} style={{
       width: small ? '50px' : '70px', height: small ? '75px' : '105px', 
-      background: faceDown ? (isDevCard ? 'none' : 'url(/card-back.jpg) center/cover') : '#fff', 
-      border: faceDown ? '2px solid #000' : 'none',
+      background: isDevCard ? 'none' : (faceDown ? 'transparent' : '#fff'), 
+      border: faceDown ? (isDevCard ? '2px solid #000' : 'none') : 'none',
       cursor: onClick ? 'pointer' : 'default', padding: 0, overflow: 'hidden', position: 'relative',
       transform: selected ? 'translateY(-15px)' : 'none', 
       boxShadow: selected ? '0 0 0 3px #f0c674, 0 15px 25px rgba(0,0,0,0.6)' : '0 2px 5px rgba(0,0,0,0.5)', transition: '0.1s',
-      ...(faceDown ? devCardStyle : {}),
+      ...(faceDown && isDevCard ? devCardStyle : {}),
       ...(isLegal && !selected ? legalStyle : {})
     }}>
       {!faceDown && (
@@ -233,6 +275,19 @@ const CardView = memo(({ card, onClick, selected, small, faceDown, className, is
         </>
       )}
       {faceDown && isDevCard && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#ffd700', fontSize: 24, fontWeight: 'bold' }}>DEV</div>}
+      
+      {/* 🔽 ЗДЕСЬ НАШ НОВЫЙ КОВРОВЫЙ ДИЗАЙН 🔽 */}
+      {isCarpet && (
+        <div className="carpet-card-back" style={{ width: '100%', height: '100%' }}>
+          <div style={{
+            position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+            color: 'rgba(240,198,116,0.4)', fontSize: small ? '24px' : '36px', fontWeight: 'bold',
+            textShadow: '0 0 10px rgba(240,198,116,0.8)'
+          }}>
+            ♠
+          </div>
+        </div>
+      )}
     </div>
   );
 });
@@ -336,7 +391,6 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole, onEx
         if (newTrickLen > prevTrickLen) playSound('card');
         if (state.deckCount < prevState.current.deckCount || state.roundNumber > prevState.current.roundNumber) playSound('deal');
         
-        // 🎵 ЗВУКИ ДЛЯ КОНЦА ИГРЫ
         if (state.phase === 'finished' && prevState.current.phase !== 'finished') {
           const mySide = state.players[state.me]?.side;
           const amIWinner = (state.matchScore.A >= 24 && mySide === 'B') || (state.matchScore.B >= 24 && mySide === 'A');
@@ -598,14 +652,20 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole, onEx
           </div>
           <div style={{ justifySelf: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <div style={{ position: 'relative', width: '100px', height: '105px' }}>
-              {gameState.deckCount > 0 && <div style={{ position: 'absolute', top: 0, left: 0, width: '70px', height: '105px', background: 'url(/card-back.jpg) center/cover', borderRadius: '8px', border: '2px solid #000', boxShadow: '0 10px 15px rgba(0,0,0,0.6)' }} />}
+              {/* 🔽 НОВАЯ КОВРОВАЯ РУБАШКА ДЛЯ КОЛОДЫ 🔽 */}
+              {gameState.deckSize > 0 && (
+                <div className="carpet-card-back" style={{ 
+                  position: 'absolute', top: 0, left: 0, width: '70px', height: '105px', 
+                  boxShadow: '0 10px 15px rgba(0,0,0,0.6)' 
+                }} />
+              )}
               {gameState.trumpCard && (
                 <div style={{ position: 'absolute', top: 15, left: 30, transform: 'rotate(90deg) translateZ(0)', zIndex: 2, willChange: 'transform', pointerEvents: 'none' }}>
                   <CardView card={gameState.trumpCard} />
                 </div>
               )}
             </div>
-            <div style={{ color: 'white', marginTop: '15px', background: 'rgba(0,0,0,0.6)', padding: '2px 10px', borderRadius: '10px' }}>В колоде: {gameState.deckCount}</div>
+            <div style={{ color: 'white', marginTop: '15px', background: 'rgba(0,0,0,0.6)', padding: '2px 10px', borderRadius: '10px' }}>В колоде: {gameState.deckSize}</div>
           </div>
           <div style={{ justifySelf: 'end', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '10px', color: gameState.players[1]?.name === DEV_NAME ? undefined : '#ccc' }} className={gameState.players[1]?.name === DEV_NAME ? 'dev-nick' : ''}>
