@@ -268,10 +268,10 @@ function applyEvent(state, event) {
     }
     if (pointsA > 60) {
       winnerSide = "A";
-      basePenalty = pointsB === 0 ? 4 : pointsB < 32 ? 4 : 2;
+      basePenalty = pointsB === 0 ? 6 : pointsB < 32 ? 4 : 2;
     } else if (pointsB > 60) {
       winnerSide = "B";
-      basePenalty = pointsA === 0 ? 4 : pointsA < 32 ? 4 : 2;
+      basePenalty = pointsA === 0 ? 6 : pointsA < 32 ? 4 : 2;
     } else {
       winnerSide = pointsA > pointsB ? "A" : "B";
       basePenalty = 6;
@@ -481,6 +481,13 @@ async function main() {
     if (!isValid) return reply.code(400).send({ error: "\u041D\u0435\u0432\u0435\u0440\u043D\u044B\u0439 \u043B\u043E\u0433\u0438\u043D \u0438\u043B\u0438 \u043F\u0430\u0440\u043E\u043B\u044C" });
     const token = import_jsonwebtoken.default.sign({ id: user.id, username: user.username, fullname: user.fullname }, "SUPER_SECRET_KEY_123", { expiresIn: "7d" });
     return { success: true, token, user: { username: user.username, fullname: user.fullname, avatar: user.avatar || "", status: user.status || "\u0412 \u0441\u0435\u0442\u0438", friends: user.friends || [], wins: user.wins || 0, losses: user.losses || 0 } };
+  });
+  app.get("/api/user/profile/:username", async (req, reply) => {
+    const { username } = req.params;
+    const users = await db.getUsers();
+    const user = users.find((u) => u.username === username);
+    if (!user) return reply.code(404).send({ error: "\u041F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044C \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D" });
+    return { username: user.username, wins: user.wins || 0, losses: user.losses || 0, avatar: user.avatar || "", status: user.status || "\u0412 \u0441\u0435\u0442\u0438" };
   });
   app.post("/api/user/update", async (req, reply) => {
     const { username, status, avatar } = req.body;
