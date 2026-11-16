@@ -11,6 +11,7 @@ export function project(state: GameState, meId: PlayerId, legalMoves: string[][]
       name: p.name,
       handCount: p.hand.length,
       connected: p.connected ?? true,
+      isAdmin: p.isAdmin === true,
     })),
     deckCount: state.deck.length,
     trumpCard: state.trumpCard,

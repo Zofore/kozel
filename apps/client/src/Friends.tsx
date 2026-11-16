@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Socket } from 'socket.io-client';
 
-const DEV_NAME = 'Vladislav';
-const API_URL = 'https://kozel-server-zofore-4jhk.onreza.app';
+import { API_URL, apiFetch, checkedJson } from './api';
 
-export function Friends({ socket, user, onBack, showToast }: { socket: Socket, user: any, onBack: () => void, showToast: (msg: string, type?: 'success' | 'error' | 'info') => void }) {
+export function Friends({ socket, user, onRoom, onBack, showToast }: { socket: Socket, user: any, onRoom: (id:string)=>void, onBack: () => void, showToast: (msg: string, type?: 'success' | 'error' | 'info') => void }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
@@ -14,12 +13,12 @@ export function Friends({ socket, user, onBack, showToast }: { socket: Socket, u
   const [friendToDelete, setFriendToDelete] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/friends/list/${user.username}`)
-      .then(res => res.json())
+    apiFetch(`${API_URL}/api/friends/list/${user.username}`)
+      .then(async res => { if(!res.ok) throw new Error('Ошибка загрузки друзей'); return res.json(); })
       .then(data => {
         setFriends(data.friends || []);
         setRequests(data.requests || []);
-      });
+      }).catch(err=>showToast(err.message,'error'));
   }, [user.username, refresh]);
 
   useEffect(() => {
@@ -34,7 +33,7 @@ export function Friends({ socket, user, onBack, showToast }: { socket: Socket, u
     setHasSearched(true);
     setSearchResults([]); 
     try {
-      const res = await fetch(`${API_URL}/api/users/search?q=${encodeURIComponent(query)}`);
+      const res = await apiFetch(`${API_URL}/api/users/search?q=${encodeURIComponent(query)}`);
       if (!res.ok) throw new Error('Ошибка поиска');
       const data = await res.json();
       setSearchResults((data.users || []).filter((u: any) => u.username !== user.username));
@@ -45,14 +44,13 @@ export function Friends({ socket, user, onBack, showToast }: { socket: Socket, u
 
   const sendRequest = async (targetUsername: string) => {
     try {
-      const res = await fetch(`${API_URL}/api/friends/request`, {
+      const res = await apiFetch(`${API_URL}/api/friends/request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: user.username, targetUsername })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      socket.emit('new_friend_request', { targetUsername, fromUsername: user.username });
       showToast(`Заявка отправлена игроку ${targetUsername}!`, 'success');
       setSearchResults([]);
       setSearchQuery('');
@@ -63,18 +61,19 @@ export function Friends({ socket, user, onBack, showToast }: { socket: Socket, u
   };
 
   const respondRequest = async (requesterUsername: string, action: 'accept' | 'decline') => {
-    await fetch(`${API_URL}/api/friends/respond`, {
+    try { await checkedJson(`${API_URL}/api/friends/respond`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: user.username, requesterUsername, action })
     });
     setRefresh(prev => prev + 1);
     if (action === 'accept') showToast(`Игрок ${requesterUsername} теперь у вас в друзьях!`, 'success');
+    } catch(err:any) { showToast(err.message,'error'); }
   };
 
   const confirmDelete = async () => {
     if (!friendToDelete) return;
-    await fetch(`${API_URL}/api/friends/remove`, {
+    try { await checkedJson(`${API_URL}/api/friends/remove`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: user.username, friendUsername: friendToDelete })
@@ -82,12 +81,16 @@ export function Friends({ socket, user, onBack, showToast }: { socket: Socket, u
     setRefresh(prev => prev + 1);
     showToast('Игрок удален из друзей', 'info');
     setFriendToDelete(null);
+    } catch(err:any) { showToast(err.message,'error'); }
   };
 
   const inviteFriend = (friendUsername: string) => {
-    socket.emit('create_room', '1v1', { name: user.username }, (res: { roomId: string }) => {
-      socket.emit('send_invite', { from: user.username, to: friendUsername, roomId: res.roomId });
-      showToast(`Приглашение отправлено игроку ${friendUsername}!`, 'info');
+    socket.timeout(5000).emit('create_room', '1v1', (err:any,res:any) => {
+      if (err || !res?.roomId) { showToast(res?.error || 'Ошибка комнаты','error'); return; }
+      socket.timeout(5000).emit('send_invite', { to: friendUsername, roomId: res.roomId }, (inviteErr:any,result:any) => {
+        if(inviteErr || !result?.success) { socket.emit('leave_room',res.roomId); showToast(result?.error || 'Не удалось пригласить','error'); return; }
+        showToast(`Приглашение отправлено игроку ${friendUsername}!`, 'info'); onRoom(res.roomId);
+      });
     });
   };
 
@@ -123,8 +126,8 @@ export function Friends({ socket, user, onBack, showToast }: { socket: Socket, u
                   {r.avatar ? <img src={r.avatar} style={{ width: '100%', height: '100%' }} /> : <div style={{ textAlign: 'center', lineHeight: '40px' }}>👤</div>}
                 </div>
                 <div>
-                  <div style={{ fontWeight: 'bold', color: r.username === DEV_NAME ? '#ffd700' : 'white' }}>
-                    {r.username === DEV_NAME && '👑 '}
+                  <div style={{ fontWeight: 'bold', color: r.isAdmin ? '#ffd700' : 'white' }}>
+                    {r.isAdmin && '👑 '}
                     {r.fullname}
                   </div>
                   <div style={{ fontSize: 12, color: '#aaa' }}>@{r.username}</div>
@@ -158,8 +161,8 @@ export function Friends({ socket, user, onBack, showToast }: { socket: Socket, u
                   {u.avatar ? <img src={u.avatar} style={{ width: '100%', height: '100%' }} /> : <div style={{ textAlign: 'center', lineHeight: '40px' }}>👤</div>}
                 </div>
                 <div>
-                  <div style={{ fontWeight: 'bold', color: u.username === DEV_NAME ? '#ffd700' : 'white' }}>
-                    {u.username === DEV_NAME && '👑 '}
+                  <div style={{ fontWeight: 'bold', color: u.isAdmin ? '#ffd700' : 'white' }}>
+                    {u.isAdmin && '👑 '}
                     {u.fullname}
                   </div>
                   <div style={{ fontSize: 12, color: '#aaa' }}>@{u.username}</div>
@@ -187,10 +190,10 @@ export function Friends({ socket, user, onBack, showToast }: { socket: Socket, u
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ color: f.username === DEV_NAME ? '#ffd700' : 'white', textShadow: f.username === DEV_NAME ? '0 0 8px rgba(255,215,0,0.5)' : 'none' }}>
+              <span style={{ color: f.isAdmin ? '#ffd700' : 'white', textShadow: f.isAdmin ? '0 0 8px rgba(255,215,0,0.5)' : 'none' }}>
                 {f.fullname}
               </span>
-              {f.username === DEV_NAME && <span title="Разработчик" style={{ fontSize: 16 }}>👑</span>}
+              {f.isAdmin && <span title="Разработчик" style={{ fontSize: 16 }}>👑</span>}
               <span style={{ fontWeight: 'normal', color: '#aaa', fontSize: 12 }}>@{f.username}</span>
             </div>
             <div style={{ fontSize: 12, color: f.online ? '#4caf50' : '#f44336' }}>{f.online ? '● В сети' : '○ Не в сети'}</div>

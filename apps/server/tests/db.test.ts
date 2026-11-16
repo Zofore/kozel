@@ -1,0 +1,36 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+
+// Deliberately refuse to touch a production database.
+const url = process.env.KOZEL_TEST_DATABASE_URL;
+if (!url || !new URL(url).pathname.endsWith('_test')) throw new Error('Set KOZEL_TEST_DATABASE_URL to a dedicated database whose name ends in _test');
+process.env.DATABASE_URL = url;
+process.env.DB_TLS = 'disable';
+process.env.NODE_ENV = 'test';
+
+test('registration, profile, friends and idempotent match stats using PostgreSQL', async () => {
+  const { db } = await import('../src/db');
+  try {
+    await db.init();
+    const names = Array.from({length:4},()=>`test-${randomUUID()}`);
+    await Promise.all(names.map(name=>db.register(name,'test-hash','Test user','test@example.invalid')));
+    const duplicate = await Promise.allSettled([db.register(names[0].toUpperCase(),'test-hash','Test user','test@example.invalid'), db.register(names[0],'test-hash','Test user','test@example.invalid')]);
+    assert(duplicate.every(x=>x.status==='rejected'));
+    const accounts = await Promise.all(names.map(n=>db.getUser(n)));
+    assert.equal(new Set(accounts.map(a=>a?.id)).size,4);
+    assert.equal(await db.updateProfile(names[0],'ready',''),true);
+    assert.equal((await db.getUser(names[0]))?.status,'ready');
+    assert.equal(await db.friends(names[1],names[0],'accept'),'Заявка не найдена');
+    assert.equal(await db.friends(names[0],names[1],'request'),null);
+    assert((await db.getUser(names[1]))?.friendRequests.includes(names[0]));
+    assert.equal(await db.friends(names[1],names[0],'accept'),null);
+    assert((await db.getUser(names[0]))?.friends.includes(names[1]));
+    assert((await db.getUser(names[1]))?.friends.includes(names[0]));
+    const match=randomUUID(), result=names.map((name,i)=>({name,won:i%2===0}));
+    await Promise.all([db.settleMatch(match,result),db.settleMatch(match,result)]);
+    for(let i=0;i<4;i++) {const u=await db.getUser(names[i]);assert.equal(u?.wins,i%2===0?1:0);assert.equal(u?.losses,i%2===0?0:1);}
+    assert.equal(await db.friends(names[0],names[1],'remove'),null);
+    assert(!(await db.getUser(names[0]))?.friends.includes(names[1]));
+  } finally {await db.close();}
+});

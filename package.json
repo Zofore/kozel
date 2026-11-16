@@ -1,1 +1,18 @@
-{"name":"kozel","private":true,"version":"0.0.1","scripts":{"test":"echo ok"}}
+{
+  "name": "kozel",
+  "private": true,
+  "version": "0.0.2",
+  "packageManager": "pnpm@10.11.0",
+  "scripts": {
+    "build": "pnpm --filter @kozel/game-core build && pnpm --filter @kozel/server build && pnpm --filter @kozel/client build",
+    "test": "pnpm --filter @kozel/game-core test",
+    "dev:server": "pnpm --filter @kozel/game-core build && pnpm --filter @kozel/server dev",
+    "dev:client": "pnpm --filter @kozel/client dev",
+    "build:deploy": "pnpm --filter @kozel/game-core build && pnpm --filter @kozel/server build && pnpm --filter @kozel/server build:deploy",
+    "test:db": "pnpm --filter @kozel/server test:db",
+    "test:integration": "pnpm --filter @kozel/client exec node --test tests/server.integration.test.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

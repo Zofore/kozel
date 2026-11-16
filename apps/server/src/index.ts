@@ -1,6 +1,8 @@
+import 'dotenv/config';
+import { randomUUID, randomInt } from 'node:crypto';
 import Fastify from 'fastify';
 import { Server } from 'socket.io';
-import { applyEvent, GameState, canBeat, validateSpecial, project, getLegalMoves, PlayerId, RANK_VALUE } from '@kozel/game-core';
+import { applyEvent, applyTurn, automaticTurn, GameState, project, getLegalMoves, PlayerId } from '@kozel/game-core';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { db } from './db';
@@ -14,151 +16,133 @@ const botTimeouts = new Map<string, NodeJS.Timeout>();
 const onlineUsers = new Map<string, string>();
 const frozenPlayers = new Map<string, Set<number>>();
 
-const REGEX_NICKNAME = /^[a-zA-Zа-яА-ЯёЁ\s]{1,21}$/;
-const REGEX_PASSWORD = /^.{1,21}$/;
-const REGEX_FULLNAME = /^[a-zA-Zа-яА-ЯёЁ\s-]{1,50}$/;
-const REGEX_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
+const JWT_SECRET = process.env.JWT_SECRET || '';
+if (JWT_SECRET.length < 32 || JWT_SECRET.startsWith('REPLACE_WITH_')) throw new Error('JWT_SECRET must have at least 32 characters');
+const ADMIN_IDS = new Set((process.env.ADMIN_USER_IDS || '').split(',').map(x => x.trim()).filter(Boolean));
+const origins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173').split(',').map(x => x.trim());
+const attempts = new Map<string, { count: number; expires: number }>();
+const roomActivity = new Map<string, number>();
+const invitations = new Map<string, { from: string; expires: number }>();
+const settling = new Set<string>();
+const isAdminId = (id: number) => ADMIN_IDS.has(String(id));
+function allowedAttempt(key: string) {
+  const now = Date.now(); const old = attempts.get(key);
+  const item = !old || old.expires <= now ? { count: 0, expires: now + 15 * 60_000 } : old;
+  item.count++; attempts.set(key, item); return item.count <= 10;
+}
+function verifyToken(token: unknown) {
+  if (typeof token !== 'string') throw new Error('Missing token');
+  const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as { id: number; username: string };
+  if (!Number.isInteger(decoded.id) || typeof decoded.username !== 'string') throw new Error('Invalid token');
+  return decoded;
+}
+const publicUser = (u: any) => ({ username: u.username, fullname: u.fullname, avatar: u.avatar || '', status: u.status || 'В сети', wins: u.wins || 0, losses: u.losses || 0, online: onlineUsers.has(u.username), isAdmin: isAdminId(u.id) });
+const validText = (value: unknown, max: number) => typeof value === 'string' && value.length <= max;
 async function main() {
+  await db.init();
+  app.get('/health',async()=>({ok:true}));
   app.addHook('onRequest', async (req, reply) => {
-    reply.header('Access-Control-Allow-Origin', '*');
-    reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    const origin = req.headers.origin;
+    if (origin && origins.includes(origin)) { reply.header('Access-Control-Allow-Origin', origin); reply.header('Vary', 'Origin'); }
+    reply.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    if (req.method === 'OPTIONS') reply.status(200).send();
+    if (req.method === 'OPTIONS') return reply.code(204).send();
   });
-
-  app.post('/api/register', async (req, reply) => {
-    const { username, password, fullname, email } = req.body as any;
-    if (!username || !password || !fullname || !email) return reply.code(400).send({ error: 'Заполните все поля' });
-    if (!REGEX_NICKNAME.test(username)) return reply.code(400).send({ error: 'Никнейм: только буквы и пробелы, до 21 символа' });
-    if (!REGEX_PASSWORD.test(password)) return reply.code(400).send({ error: 'Пароль: до 21 символа' });
-    if (!REGEX_FULLNAME.test(fullname)) return reply.code(400).send({ error: 'ФИО некорректно' });
-    if (!REGEX_EMAIL.test(email)) return reply.code(400).send({ error: 'Некорректный Email' });
-
-    const users = await db.getUsers();
-    if (users.find(u => u.username.toLowerCase() === username.toLowerCase())) return reply.code(400).send({ error: 'Этот никнейм уже занят' });
-
+  app.options('/*', async (_req, reply) => reply.code(204).send());
+  app.setErrorHandler((err, req, reply) => {
+    req.log.error({ code: (err as any).code }, 'Request failed');
+    reply.code(err.statusCode && err.statusCode < 500 ? err.statusCode : 500).send({ error: 'Ошибка запроса или сервера' });
+  });
+  app.addHook('preHandler', async (req, reply) => {
+    const path = req.url.split('?')[0];
+    if (!path.startsWith('/api/') || path === '/api/login' || path === '/api/register') return;
     try {
-      const hash = await bcrypt.hash(password, 10);
-      const newId = users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1;
-      users.push({ id: newId, username, password: hash, fullname, email, avatar: '', status: 'В сети', friends: [], friendRequests: [], wins: 0, losses: 0 });
-      await db.saveUsers(users);
-      return { success: true };
-    } catch (e) { return reply.code(500).send({ error: 'Ошибка сервера' }); }
+      const decoded = verifyToken(req.headers.authorization?.replace(/^Bearer /i, ''));
+      const body = req.body as any; const params = req.params as any;
+      if ((body?.username !== undefined && body.username !== decoded.username) || (path.startsWith('/api/friends/list/') && params?.username !== decoded.username)) return reply.code(403).send({ error: 'Доступ запрещён' });
+      (req as any).identity = decoded;
+    } catch { return reply.code(401).send({ error: 'Требуется авторизация' }); }
   });
-
+  app.post('/api/register', async (req, reply) => {
+    if (!allowedAttempt('register:'+req.ip)) return reply.code(429).send({ error: 'Слишком много попыток' });
+    const { username, password, fullname, email } = (req.body || {}) as any;
+    if (typeof username !== 'string' || !/^[a-zA-Zа-яА-ЯёЁ ]{1,21}$/.test(username) || username !== username.trim() || ['система','debug'].includes(username.toLowerCase())) return reply.code(400).send({ error: 'Некорректный никнейм' });
+    if (typeof password !== 'string' || password.length < 8 || Buffer.byteLength(password) > 72) return reply.code(400).send({ error: 'Пароль: от 8 символов, не более 72 байт' });
+    if (typeof fullname !== 'string' || !/^[a-zA-Zа-яА-ЯёЁ -]{1,50}$/.test(fullname) || typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return reply.code(400).send({ error: 'Некорректные ФИО или Email' });
+    try { await db.register(username, await bcrypt.hash(password, 12), fullname, email); }
+    catch (e: any) { if (e.code === '23505') return reply.code(409).send({ error: 'Этот никнейм уже занят' }); throw e; }
+    return { success: true };
+  });
   app.post('/api/login', async (req, reply) => {
-    const { username, password } = req.body as any;
-    const users = await db.getUsers();
-    const user = users.find(u => u.username.toLowerCase() === username.toLowerCase());
-    if (!user) return reply.code(400).send({ error: 'Неверный логин или пароль' });
-    const isValid = await bcrypt.compare(password, user.password);
-    if (!isValid) return reply.code(400).send({ error: 'Неверный логин или пароль' });
-    const token = jwt.sign({ id: user.id, username: user.username, fullname: user.fullname }, 'SUPER_SECRET_KEY_123', { expiresIn: '7d' });
-    return { success: true, token, user: { username: user.username, fullname: user.fullname, avatar: user.avatar || '', status: user.status || 'В сети', friends: user.friends || [], wins: user.wins || 0, losses: user.losses || 0 } };
+    const { username, password } = (req.body || {}) as any;
+    if (!allowedAttempt('login:'+req.ip)) return reply.code(429).send({ error: 'Слишком много попыток' });
+    if (typeof username !== 'string' || username.length > 255 || typeof password !== 'string' || Buffer.byteLength(password) > 72) return reply.code(400).send({ error: 'Неверный логин или пароль' });
+    const user = await db.getUser(username);
+    if (!user || !await bcrypt.compare(password,user.password)) return reply.code(401).send({ error: 'Неверный логин или пароль' });
+    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { algorithm: 'HS256', expiresIn: '7d' });
+    return { success: true, token, user: { ...publicUser(user), friends: user.friends || [], isAdmin: isAdminId(user.id) } };
   });
-
+  app.get('/api/me', async (req, reply) => {
+    const identity = (req as any).identity;
+    const u = await db.getUser(identity.username);
+    if (!u || u.id !== identity.id) return reply.code(401).send({error:'Требуется авторизация'});
+    return { ...publicUser(u), isAdmin: isAdminId(u.id) };
+  });
   app.get('/api/user/profile/:username', async (req, reply) => {
-    const { username } = req.params as any;
-    const users = await db.getUsers();
-    const user = users.find(u => u.username === username);
+    const user = await db.getUser((req.params as any).username);
     if (!user) return reply.code(404).send({ error: 'Пользователь не найден' });
-    return { username: user.username, wins: user.wins || 0, losses: user.losses || 0, avatar: user.avatar || '', status: user.status || 'В сети' };
+    return publicUser(user);
   });
-
   app.post('/api/user/update', async (req, reply) => {
-    const { username, status, avatar } = req.body as any;
-    const users = await db.getUsers();
-    const userIndex = users.findIndex(u => u.username === username);
-    if (userIndex === -1) return reply.code(404).send({ error: 'Пользователь не найден' });
-    if (status !== undefined) users[userIndex].status = status;
-    if (avatar !== undefined) users[userIndex].avatar = avatar;
-    await db.saveUsers(users);
+    const { status, avatar } = (req.body || {}) as any;
+    if ((status !== undefined && !validText(status,255)) || (avatar !== undefined && (!validText(avatar,2048) || (avatar && !/^https?:\/\//i.test(avatar))))) return reply.code(400).send({ error: 'Некорректный профиль' });
+    if (!await db.updateProfile((req as any).identity.username,status,avatar)) return reply.code(404).send({ error: 'Пользователь не найден' });
     return { success: true };
   });
-
   app.get('/api/users/search', async (req, reply) => {
-    const queryParams = req.query as any;
-    let q = queryParams.q;
-    if (!q || typeof q !== 'string') return { users: [] };
-    const searchString = q.replace(/@/g, '').trim().toLowerCase();
-    if (!searchString) return { users: [] };
-    const users = await db.getUsers();
-    const results = users.filter(u => u.username.toLowerCase().includes(searchString)).map(u => ({
-      username: u.username, fullname: u.fullname, avatar: u.avatar, status: u.status, online: onlineUsers.has(u.username), wins: u.wins || 0, losses: u.losses || 0
-    }));
-    return { users: results };
+    const q = (req.query as any).q;
+    if (typeof q !== 'string' || q.length > 100) return { users: [] };
+    const search = q.replace(/@/g,'').trim().toLowerCase();
+    return { users: search ? (await db.getUsers()).filter(u=>u.username.toLowerCase().includes(search)).slice(0,50).map(publicUser) : [] };
   });
-
   app.post('/api/friends/request', async (req, reply) => {
-    const { username, targetUsername } = req.body as any;
-    const users = await db.getUsers();
-    const user = users.find(u => u.username === username);
-    const target = users.find(u => u.username === targetUsername);
-    if (!user || !target) return reply.code(404).send({ error: 'Пользователь не найден' });
-    if (user.username === target.username) return reply.code(400).send({ error: 'Нельзя добавить себя' });
-    if (user.friends?.includes(targetUsername)) return reply.code(400).send({ error: 'Уже в друзьях' });
-    if (!target.friendRequests) target.friendRequests = [];
-    if (!target.friendRequests.includes(username)) { target.friendRequests.push(username); await db.saveUsers(users); }
-    return { success: true };
+    const { targetUsername } = (req.body || {}) as any;
+    if (typeof targetUsername !== 'string') return reply.code(400).send({error:'Некорректная заявка'});
+    const username = (req as any).identity.username;
+    const error = await db.friends(username,targetUsername,'request');
+    if (error) return reply.code(400).send({error});
+    const targetSocket = onlineUsers.get(targetUsername);
+    if (targetSocket) io.to(targetSocket).emit('friend_request_received',{fromUsername:username});
+    return {success:true};
   });
-
   app.post('/api/friends/respond', async (req, reply) => {
-    const { username, requesterUsername, action } = req.body as any;
-    const users = await db.getUsers();
-    const user = users.find(u => u.username === username);
-    const requester = users.find(u => u.username === requesterUsername);
-    if (!user || !requester) return reply.code(404).send({ error: 'Пользователь не найден' });
-    if (user.friendRequests) user.friendRequests = user.friendRequests.filter((r: string) => r !== requesterUsername);
-    if (action === 'accept') {
-      if (!user.friends) user.friends = [];
-      if (!requester.friends) requester.friends = [];
-      if (!user.friends.includes(requesterUsername)) user.friends.push(requesterUsername);
-      if (!requester.friends.includes(username)) requester.friends.push(username);
-    }
-    await db.saveUsers(users);
-    return { success: true };
+    const { requesterUsername, action } = (req.body || {}) as any;
+    if (typeof requesterUsername !== 'string' || !['accept','decline'].includes(action)) return reply.code(400).send({error:'Некорректная заявка'});
+    const error = await db.friends((req as any).identity.username,requesterUsername,action);
+    if (error) return reply.code(400).send({error}); return {success:true};
   });
-
   app.post('/api/friends/remove', async (req, reply) => {
-    const { username, friendUsername } = req.body as any;
-    const users = await db.getUsers();
-    const user = users.find(u => u.username === username);
-    const friend = users.find(u => u.username === friendUsername);
-    if (!user || !friend) return reply.code(404).send({ error: 'Пользователь не найден' });
-    if (user.friends) user.friends = user.friends.filter((f: string) => f !== friendUsername);
-    if (friend.friends) friend.friends = friend.friends.filter((f: string) => f !== username);
-    await db.saveUsers(users);
-    return { success: true };
+    const {friendUsername} = (req.body || {}) as any;
+    if (typeof friendUsername !== 'string') return reply.code(400).send({error:'Некорректная заявка'});
+    const error = await db.friends((req as any).identity.username,friendUsername,'remove');
+    if (error) return reply.code(400).send({error}); return {success:true};
   });
-
   app.get('/api/friends/list/:username', async (req, reply) => {
-    const { username } = req.params as any;
-    const users = await db.getUsers();
-    const user = users.find(u => u.username === username);
-    if (!user) return reply.code(404).send({ error: 'Пользователь не найден' });
-    const friendsList = (user.friends || []).map((fName: string) => {
-      const f = users.find(u => u.username === fName);
-      return f ? { username: f.username, fullname: f.fullname, avatar: f.avatar, status: f.status, online: onlineUsers.has(f.username), wins: f.wins || 0, losses: f.losses || 0 } : null;
-    }).filter(Boolean);
-    const requestsList = (user.friendRequests || []).map((rName: string) => {
-      const r = users.find(u => u.username === rName);
-      return r ? { username: r.username, fullname: r.fullname, avatar: r.avatar } : null;
-    }).filter(Boolean);
-    return { friends: friendsList, requests: requestsList };
+    const users = await db.getUsers(); const u = users.find(x=>x.username === (req as any).identity.username);
+    if (!u) return reply.code(404).send({error:'Пользователь не найден'});
+    return { friends: users.filter(x=>u.friends?.includes(x.username)).map(publicUser), requests: users.filter(x=>u.friendRequests?.includes(x.username)).map(x=>({username:x.username,fullname:x.fullname,avatar:x.avatar,isAdmin:isAdminId(x.id)})) };
   });
 
-  await app.listen({ port: PORT, host: '0.0.0.0' });
-  console.log('Server started on port ' + PORT);
+  const io = new Server(app.server, { cors: { origin: origins }, maxHttpBufferSize: 64 * 1024, allowRequest: (req, cb) => cb(null, !req.headers.origin || origins.includes(req.headers.origin)) });
 
-  const io = new Server(app.server, { cors: { origin: '*' } });
-
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token;
     if (!token) return next(new Error('Требуется авторизация'));
     
     try {
-      const decoded = jwt.verify(token, 'SUPER_SECRET_KEY_123') as any;
+      const decoded = verifyToken(token);
+      const account = await db.getUser(decoded.username);
+      if (!account || account.id !== decoded.id || account.username !== decoded.username) return next(new Error('Неверный токен'));
       (socket as any).data = { user: decoded };
       next();
     } catch (err) {
@@ -167,47 +151,26 @@ async function main() {
   });
 
   function clearTurnTimer(roomId: string) { 
-    if (turnTimers.has(roomId)) { clearTimeout(turnTimers.get(roomId)); turnTimers.delete(roomId); } 
-    if (botTimeouts.has(roomId)) { clearTimeout(botTimeouts.get(roomId)); botTimeouts.delete(roomId); }
+    if (turnTimers.has(roomId)) { clearTimeout(turnTimers.get(roomId)!); turnTimers.delete(roomId); } 
+    if (botTimeouts.has(roomId)) { clearTimeout(botTimeouts.get(roomId)!); botTimeouts.delete(roomId); }
   }
 
   function startTurnTimer(io: Server, roomId: string) {
     clearTurnTimer(roomId);
     const room = rooms.get(roomId);
     if (!room || room.phase !== 'playing') return;
-    const player = room.trick ? room.trick.respondent : room.currentPlayer;
-    const frozen = frozenPlayers.get(roomId);
-    if (frozen?.has(player)) return;
-
-    const timer = setTimeout(async () => {
-      const currentRoom = rooms.get(roomId);
-      if (!currentRoom || currentRoom.phase !== 'playing') return;
-      const player = currentRoom.trick ? currentRoom.trick.respondent : currentRoom.currentPlayer;
-      const hand = currentRoom.players[player]?.hand;
-      
-      if (!hand || hand.length === 0) {
-        const res = applyEvent(currentRoom, { type: 'PASS', player: player as any, cards: [] });
-        if (!res.ok) return;
-        let state = res.state;
-        if (state.trick === null && state.lastTrickWinner !== null) {
-          const drawRes = applyEvent(state, { type: 'DRAW', winner: state.lastTrickWinner });
-          if (drawRes.ok) state = drawRes.state;
-        }
-        rooms.set(roomId, state); await checkAndBroadcast(io, roomId, state);
-        return;
-      }
-
-      if (currentRoom.trick) {
-        const cardToPass = [hand[hand.length - 1]];
-        const res = applyEvent(currentRoom, { type: 'PASS', player: player as any, cards: cardToPass });
-        if (res.ok) { rooms.set(roomId, res.state); await checkAndBroadcast(io, roomId, res.state); }
-      } else {
-        const cardToAttack = [hand[hand.length - 1]];
-        const res = applyEvent(currentRoom, { type: 'ATTACK', player: player as any, cards: cardToAttack });
-        if (res.ok) { rooms.set(roomId, res.state); await checkAndBroadcast(io, roomId, res.state); }
-      }
-    }, 30000);
-    turnTimers.set(roomId, timer);
+    if (frozenPlayers.get(roomId)?.has(room.currentPlayer)) { room.turnDeadline=null; return; }
+    room.turnDeadline = Date.now() + 30000;
+    const version = room.stateVersion;
+    const run = async (bot = false) => {
+      const current = rooms.get(roomId);
+      if (!current || current.phase !== 'playing' || current.stateVersion !== version) return;
+      const res = automaticTurn(current, bot);
+      if (res.ok) await checkAndBroadcast(io, roomId, res.state);
+      else { app.log.error({roomId, error:res.error}, 'Automatic turn failed'); startTurnTimer(io,roomId); broadcastState(io,roomId,current); }
+    };
+    turnTimers.set(roomId,setTimeout(()=>void run().catch(err=>app.log.error(err)),30000));
+    if (playersInRoom.get(roomId)?.[room.currentPlayer] === '__BOT__') botTimeouts.set(roomId,setTimeout(()=>void run(true).catch(err=>app.log.error(err)),1200));
   }
 
   function rollDiceForRoom(io: Server, roomId: string) {
@@ -216,7 +179,7 @@ async function main() {
     let maxRoll = 0; let winners: PlayerId[] = [];
 
     room.players.forEach(p => {
-      const roll = Math.floor(Math.random() * 6) + 1; rolls[p.id] = roll;
+      const roll = randomInt(1,7); rolls[p.id] = roll;
       if (roll > maxRoll) { maxRoll = roll; winners = [p.id]; } else if (roll === maxRoll) { winners.push(p.id); }
     });
 
@@ -224,77 +187,27 @@ async function main() {
     rooms.set(roomId, newState); broadcastState(io, roomId, newState);
 
     setTimeout(async () => {
-      const currentRoom = rooms.get(roomId); if (!currentRoom) return;
+      const currentRoom = rooms.get(roomId); if (!currentRoom || currentRoom.phase !== 'dice-roll' || currentRoom.stateVersion !== newState.stateVersion) return;
       if (winners.length === 1) {
         const winnerId = winners[0];
-        const seed = Math.floor(Math.random() * 1000000);
+        const seed = randomInt(0, 0x100000000);
         const res = applyEvent(currentRoom, { type: 'START_ROUND', firstPlayer: winnerId, seed });
         if (res.ok) { rooms.set(roomId, res.state); await checkAndBroadcast(io, roomId, res.state); }
       } else { rollDiceForRoom(io, roomId); }
     }, 4000);
   }
 
-  async function botMove(io: Server, roomId: string) {
-    const room = rooms.get(roomId); if (!room || room.phase !== 'playing') return;
-    if (room.mode !== '1v1') return;
-    const botId = 1; const bot = room.players[botId]; if (!bot) return;
-
-    try {
-      if (!room.trick && room.currentPlayer === botId) {
-        const card = bot.hand[0];
-        const res = applyEvent(room, { type: 'ATTACK', player: botId, cards: [card] });
-        if (res.ok) { rooms.set(roomId, res.state); await checkAndBroadcast(io, roomId, res.state); }
-        return;
-      }
-
-      if (room.trick && room.trick.respondent === botId) {
-        const required = room.trick.required; const top = room.trick.topCards;
-        const sortedHand = [...bot.hand].sort((a, b) => RANK_VALUE[a.rank] - RANK_VALUE[b.rank]);
-        
-        let beatCards: any[] | null = null;
-        const targetSuit = top[0].suit; const sameSuit = sortedHand.filter(c => c.suit === targetSuit);
-        if (sameSuit.length >= required) {
-          const highest = sameSuit.slice(-required);
-          try { if (canBeat(highest, top, room.trump!)) beatCards = highest; } catch {}
-        }
-        if (!beatCards && room.trump) {
-          const trumpCards = sortedHand.filter(c => c.suit === room.trump);
-          if (trumpCards.length >= required) {
-            const highestTrumps = trumpCards.slice(-required);
-            try { if (canBeat(highestTrumps, top, room.trump!)) beatCards = highestTrumps; } catch {}
-          }
-        }
-
-        if (beatCards) {
-          const res = applyEvent(room, { type: 'BEAT', player: botId, cards: beatCards });
-          if (res.ok) { rooms.set(roomId, res.state); await checkAndBroadcast(io, roomId, res.state); return; }
-        }
-        
-        const res = applyEvent(room, { type: 'PASS', player: botId, cards: [] });
-        if (res.ok) {
-          let state = res.state;
-          if (state.trick === null && state.lastTrickWinner !== null) {
-            const drawRes = applyEvent(state, { type: 'DRAW', winner: state.lastTrickWinner });
-            if (drawRes.ok) state = drawRes.state;
-          }
-          rooms.set(roomId, state); await checkAndBroadcast(io, roomId, state);
-        }
-        return;
-      }
-    } catch (e) { console.error('Bot exception', e); }
-  }
-
   function createDevRoom(socket: any): string {
-    const roomId = 'DEV'; 
+    const roomId = 'DEV-' + randomUUID(); 
     const name = socket.data.user.username;
     const initialState: GameState = {
-      mode: '1v1', players: [{ id: 0, side: 'A', hand: [], name }, { id: 1, side: 'B', hand: [], name: '🤖 BOT' }],
+      mode: '1v1', players: [{ id: 0, side: 'A', hand: [], name, connected: true, isAdmin: isAdminId(socket.data.user.id) }, { id: 1, side: 'B', hand: [], name: '🤖 BOT', connected: true }],
       deck: [], trumpCard: null, trump: null, trumpChanged: false, trumpChangeEvent: null,
-      currentPlayer: 0, trick: null, lastTrickWinner: null, phase: 'finished',
+      currentPlayer: 0, trick: null, lastTrickWinner: null, phase: 'waiting',
       matchScore: { A: 0, B: 0 }, multiplier: 1, roundNumber: 0, bita: { A: [], B: [] }, lastRoundPoints: null, diceRolls: null,
       stateVersion: 0, turnDeadline: null, settled: false
     };
-    rooms.set(roomId, initialState); playersInRoom.set(roomId, [socket.id, '__BOT__']); socket.join(roomId); return roomId;
+    rooms.set(roomId, initialState); roomActivity.set(roomId,Date.now()); playersInRoom.set(roomId, [socket.id, '__BOT__']); socket.join(roomId); return roomId;
   }
 
   function findRoomOfSocket(socketId: string): string | null {
@@ -302,72 +215,140 @@ async function main() {
     return null;
   }
 
+  function removeRoom(roomId: string, reason: string) {
+    io.to(roomId).emit('kicked',reason); io.in(roomId).socketsLeave(roomId);
+    rooms.delete(roomId); playersInRoom.delete(roomId); frozenPlayers.delete(roomId); roomActivity.delete(roomId); clearTurnTimer(roomId);
+  }
+  function detach(socket: any, roomId: string, explicit = false) {
+    const room = rooms.get(roomId), seats = playersInRoom.get(roomId);
+    if (!room || !seats) return;
+    const idx = seats.indexOf(socket.id); if (idx < 0) return;
+    seats[idx] = ''; room.players[idx].connected = false; socket.leave(roomId);
+    if (explicit && room.phase === 'waiting') {
+      const name=room.players[idx].name;
+      room.players[idx].name = 'Ожидание...'; room.players[idx].isAdmin=false;
+      for(const [key,invite] of invitations) if(key.startsWith(roomId+':') && invite.from===name) invitations.delete(key);
+    }
+    roomActivity.set(roomId,Date.now());
+    if (explicit && (room.phase === 'waiting' && !seats.some(x=>x && x !== '__BOT__') || roomId.startsWith('DEV-'))) removeRoom(roomId,'Комната закрыта');
+    else broadcastState(io,roomId,room);
+  }
+  function join(socket: any, roomId: string, notify = true): boolean {
+    const room = rooms.get(roomId), seats = playersInRoom.get(roomId);
+    if (!room || !seats) { if(notify) socket.emit('kicked','Комната не найдена'); return false; }
+    const name = socket.data.user.username;
+    let idx = room.players.findIndex((p,i)=>p.name === name && seats[i] !== '__BOT__');
+    if (idx < 0 && room.phase === 'waiting' && !roomId.startsWith('DEV-')) idx = room.players.findIndex((p,i)=>p.name === 'Ожидание...' && !seats[i]);
+    if (idx < 0) { if(notify) socket.emit('kicked','Комната заполнена или игра уже началась'); return false; }
+    const otherRoom = findRoomOfSocket(socket.id);
+    if (otherRoom && otherRoom !== roomId) detach(socket,otherRoom,true);
+    const newSeat=room.players[idx].name !== name;
+    const oldSocket = seats[idx];
+    if (oldSocket && oldSocket !== socket.id) { io.to(oldSocket).emit('kicked','Вход выполнен с другого подключения'); io.sockets.sockets.get(oldSocket)?.leave(roomId); }
+    seats[idx] = socket.id; room.players[idx].name = name; room.players[idx].connected = true; room.players[idx].isAdmin=isAdminId(socket.data.user.id);
+    socket.join(roomId); roomActivity.set(roomId,Date.now());
+    if (newSeat && room.players[idx].isAdmin && !roomId.startsWith('DEV-')) io.to(roomId).emit('dev_joined',{name});
+    if (room.phase === 'waiting' && seats.every(Boolean)) rollDiceForRoom(io,roomId);
+    else broadcastState(io,roomId,room);
+    return true;
+  }
+  const maintenance = setInterval(()=>{
+    const now = Date.now();
+    for (const [k,v] of attempts) if (v.expires <= now) attempts.delete(k);
+    for (const [k,v] of invitations) if (v.expires <= now || !rooms.has(k.split(':')[0])) invitations.delete(k);
+    for (const [id,room] of rooms) {
+      if (room.phase === 'finished' && !room.settled && !id.startsWith('DEV-')) void settle(id,room);
+      if (now - (roomActivity.get(id) || now) > 30*60_000 && !settling.has(id) && (room.phase !== 'finished' || room.settled || id.startsWith('DEV-'))) removeRoom(id,'Комната закрыта из-за неактивности');
+    }
+  },60_000); maintenance.unref();
+
   io.on('connection', (socket) => {
-    const myName = socket.data.user.username;
-
-    socket.on('register_online', () => { onlineUsers.set(myName, socket.id); socket.broadcast.emit('user_status_change', { username: myName, online: true }); });
-    
-    socket.on('disconnect', () => {
-      onlineUsers.delete(myName);
-      socket.broadcast.emit('user_status_change', { username: myName, online: false });
+    const myName = socket.data.user.username as string;
+    const isAdmin = isAdminId(socket.data.user.id);
+    const isMember = (roomId: string) => playersInRoom.get(roomId)?.includes(socket.id) === true;
+    const oldSocket = onlineUsers.get(myName);
+    onlineUsers.set(myName,socket.id);
+    if (oldSocket && oldSocket !== socket.id) io.sockets.sockets.get(oldSocket)?.disconnect(true);
+    socket.broadcast.emit('user_status_change',{username:myName,online:true});
+    // Reject expired tokens and malformed or overly frequent socket events before handlers run.
+    let count = 0, windowStart = Date.now();
+    socket.use((packet,next)=>{
+      try { verifyToken(socket.handshake.auth.token); } catch { socket.disconnect(true); return; }
+      if (Date.now()-windowStart > 1000) { windowStart=Date.now(); count=0; }
+      if (++count > 30) return next(new Error('Слишком много запросов'));
+      const [event, data] = packet;
+      if (['send_invite','accept_invite','chat_message','send_reaction','dev_command'].includes(event) && (!data || typeof data !== 'object')) return next(new Error('Некорректный запрос'));
+      next();
     });
-
-    socket.on('new_friend_request', ({ targetUsername, fromUsername }) => { const targetSocket = onlineUsers.get(targetUsername); if (targetSocket) io.to(targetSocket).emit('friend_request_received', { fromUsername }); });
-    socket.on('send_invite', ({ from, to, roomId }) => { const targetSocket = onlineUsers.get(to); if (targetSocket) io.to(targetSocket).emit('receive_invite', { from, roomId }); });
-    socket.on('accept_invite', ({ from, roomId }) => { const senderSocket = onlineUsers.get(from); if (senderSocket) io.to(senderSocket).emit('invite_accepted', { roomId }); });
-
+    socket.on('error',()=>{});
+    socket.on('register_online', () => {});
+    socket.on('disconnect', () => {
+      if (onlineUsers.get(myName) === socket.id) { onlineUsers.delete(myName); socket.broadcast.emit('user_status_change',{username:myName,online:false}); }
+      const id = findRoomOfSocket(socket.id); if (id) detach(socket,id);
+    });
+    socket.on('leave_room', (roomId: string) => { if (isMember(roomId)) detach(socket,roomId,true); });
+    socket.on('send_invite', ({ to, roomId }, callback?: (res:any)=>void) => {
+      const respond=(result:any)=>{if(typeof callback==='function') callback(result);};
+      if (typeof to !== 'string' || typeof roomId !== 'string' || !isMember(roomId) || rooms.get(roomId)?.phase !== 'waiting' || to === myName) return respond({error:'Приглашение недоступно'});
+      const target = onlineUsers.get(to); if (!target) return respond({error:'Игрок не в сети'});
+      invitations.set(roomId+':'+to,{from:myName,expires:Date.now()+120000});
+      io.to(target).emit('receive_invite',{from:myName,roomId}); respond({success:true});
+    });
+    socket.on('accept_invite', ({ roomId }, callback?: (res: any)=>void) => {
+      if (typeof roomId !== 'string') { if(typeof callback==='function') callback({error:'Неверная комната'}); return; }
+      const key=roomId+':'+myName, invite=invitations.get(key);
+      if (typeof roomId !== 'string' || !invite || invite.expires < Date.now() || rooms.get(roomId)?.phase !== 'waiting' || !join(socket,roomId,false)) { if(typeof callback==='function') callback({error:'Приглашение недействительно'}); return; }
+      invitations.delete(key); const sender=onlineUsers.get(invite.from);
+      if(sender) io.to(sender).emit('invite_accepted',{roomId}); if(typeof callback==='function') callback({roomId});
+    });
     socket.on('create_room', (mode: '1v1' | '2v2', dataOrCallback: any, maybeCallback?: any) => {
-      let callback = maybeCallback;
-      if (typeof dataOrCallback === 'function') { callback = dataOrCallback; }
-
-      const roomId = Math.random().toString(36).substring(2, 8);
+      const callback = typeof dataOrCallback === 'function' ? dataOrCallback : maybeCallback;
+      if (!['1v1','2v2'].includes(mode)) { if(typeof callback==='function') callback({error:'Неверный режим'}); return; }
+      const previous = findRoomOfSocket(socket.id); if(previous) detach(socket,previous,true);
+      const roomId = randomUUID();
       const initialState: GameState = {
-        mode, players: mode === '1v1' 
-          ? [{ id: 0, side: 'A', hand: [], name: myName }, { id: 1, side: 'B', hand: [], name: 'Ожидание...' }] 
-          : [{ id: 0, side: 'A', hand: [], name: myName }, { id: 1, side: 'B', hand: [], name: 'Ожидание...' }, { id: 2, side: 'A', hand: [], name: 'Ожидание...' }, { id: 3, side: 'B', hand: [], name: 'Ожидание...' }],
+        mode, players: Array.from({length:mode==='1v1'?2:4},(_,i)=>({id:i as PlayerId, side:i%2?'B':'A',hand:[],name:i===0?myName:'Ожидание...',connected:i===0,isAdmin:i===0 && isAdmin})),
         deck: [], trumpCard: null, trump: null, trumpChanged: false, trumpChangeEvent: null,
-        currentPlayer: 0, trick: null, lastTrickWinner: null, phase: 'finished', matchScore: { A: 0, B: 0 }, multiplier: 1, roundNumber: 0, bita: { A: [], B: [] }, lastRoundPoints: null, diceRolls: null,
+        currentPlayer: 0, trick: null, lastTrickWinner: null, phase: 'waiting', matchScore: { A: 0, B: 0 }, multiplier: 1, roundNumber: 0, bita: { A: [], B: [] }, lastRoundPoints: null, diceRolls: null,
         stateVersion: 0, turnDeadline: null, settled: false
       };
-      rooms.set(roomId, initialState); playersInRoom.set(roomId, []); socket.join(roomId); 
-      if (typeof callback === 'function') callback({ roomId });
+      const seats = initialState.players.map((_,i)=>i===0?socket.id:'');
+      rooms.set(roomId,initialState); playersInRoom.set(roomId,seats); roomActivity.set(roomId,Date.now()); socket.join(roomId);
+      if(typeof callback==='function') callback({roomId});
+    });
+    socket.on('create_dev_room', (callback: any) => {
+      if (!isAdmin) { if(typeof callback==='function') callback({error:'Доступ запрещён'}); return; }
+      const previous=findRoomOfSocket(socket.id); if(previous) detach(socket,previous,true);
+      const id=createDevRoom(socket); if(typeof callback==='function') callback({roomId:id}); rollDiceForRoom(io,id);
+    });
+    socket.on('join_room', (roomId: string, legacyOrCallback?: any, callback?: any) => {
+      const ack = typeof legacyOrCallback === 'function' ? legacyOrCallback : callback;
+      const ok = typeof roomId === 'string' && join(socket,roomId,typeof ack!=='function');
+      if(typeof ack==='function') ack(ok ? {roomId} : {error:'Не удалось войти в комнату'});
     });
 
-    socket.on('create_dev_room', (callback: any) => { const roomId = createDevRoom(socket); if (typeof callback === 'function') callback({ roomId }); });
-
-    socket.on('join_room', (roomId: string) => {
-      const room = rooms.get(roomId); if (!room) return; socket.join(roomId);
-      const players = playersInRoom.get(roomId) || [];
-      if (!players.includes(socket.id)) { 
-        players.push(socket.id); playersInRoom.set(roomId, players); 
-        const newPlayerIdx = players.length - 1;
-        if (room.players[newPlayerIdx]) room.players[newPlayerIdx].name = myName;
-        if (myName === 'Vladislav' && roomId !== 'DEV') io.to(roomId).emit('dev_joined', { name: 'Vladislav' });
-      }
-      const maxPlayers = room.mode === '1v1' ? 2 : 4;
-      if (players.length === maxPlayers && room.phase === 'finished') rollDiceForRoom(io, roomId);
-      else broadcastState(io, roomId, room);
-    });
-
-    socket.on('next_round', async (roomId: string) => {
-      const room = rooms.get(roomId); if (!room || room.phase !== 'round-scored') return;
+    socket.on('next_round', async (roomId: string, version: number) => {
+      const room = rooms.get(roomId); if (!room || !isMember(roomId) || room.phase !== 'round-scored' || version !== room.stateVersion) return;
+      roomActivity.set(roomId,Date.now());
       const cleanState = { ...room, bita: { A: [], B: [] }, trumpChanged: false, diceRolls: null };
-      const seed = Math.floor(Math.random() * 1000000);
+      const seed = randomInt(0, 0x100000000);
       const res = applyEvent(cleanState, { type: 'START_ROUND', firstPlayer: room.lastTrickWinner ?? 0, seed });
       if (res.ok) { rooms.set(roomId, res.state); await checkAndBroadcast(io, roomId, res.state); }
     });
 
     socket.on('chat_message', ({ roomId, text }) => {
+      if (!isMember(roomId) || typeof text !== 'string' || !text.trim() || text.length > 500) return;
       const msgId = Math.random().toString(36).substring(7);
       const now = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 
-      if (myName === 'Vladislav' && typeof text === 'string' && text.startsWith('/')) {
+      if (isAdmin && typeof text === 'string' && text.startsWith('/')) {
         const parts = text.trim().split(/\s+/); const cmd = parts[0].toLowerCase(); const arg = parts[1]; const room = rooms.get(roomId);
 
         if (cmd === '/kick' && arg) {
           if (!room) return; const players = playersInRoom.get(roomId) || []; const targetIdx = room.players.findIndex(p => p.name === arg);
           if (targetIdx !== -1 && players[targetIdx] && players[targetIdx] !== '__BOT__') {
-            io.to(players[targetIdx]).emit('kicked', `Вас исключил администратор`);
+            const target=io.sockets.sockets.get(players[targetIdx]); if(target) { detach(target,roomId,true); target.emit('kicked','Вас исключил администратор'); }
+            if(room.phase !== 'waiting') { removeRoom(roomId,'Матч закрыт администратором'); return; }
             io.to(roomId).emit('chat_message', { id: msgId, sender: 'СИСТЕМА', text: `👢 Игрок ${arg} исключён из комнаты`, time: now });
           } else { socket.emit('chat_message', { id: msgId, sender: 'DEBUG', text: `Игрок ${arg} не найден`, time: now }); }
           return;
@@ -379,8 +360,8 @@ async function main() {
           socket.emit('chat_message', { id: msgId, sender: 'DEBUG', text: info, time: now }); return;
         }
         if (cmd === '/reset') {
-          if (!room) return; const cleanState = { ...room, bita: { A: [], B: [] }, trumpChanged: false, diceRolls: null };
-          const seed = Math.floor(Math.random() * 1000000);
+          if (!room || room.phase !== 'playing') return; const cleanState = { ...room, bita: { A: [], B: [] }, trumpChanged: false, diceRolls: null };
+          const seed = randomInt(0, 0x100000000);
           const res = applyEvent(cleanState, { type: 'START_ROUND', firstPlayer: room.lastTrickWinner ?? 0, seed });
           if (res.ok) { rooms.set(roomId, res.state); checkAndBroadcast(io, roomId, res.state); }
           io.to(roomId).emit('chat_message', { id: msgId, sender: 'СИСТЕМА', text: '🔄 Кон перезапущен администратором', time: now }); return;
@@ -388,11 +369,12 @@ async function main() {
         if (cmd === '/secret') { io.to(roomId).emit('admin_secret_fx'); io.to(roomId).emit('chat_message', { id: msgId, sender: 'СИСТЕМА', text: '👑 Создатель наблюдает за вами... Удачи, смертные! 🃏', time: now }); return; }
         socket.emit('chat_message', { id: msgId, sender: 'DEBUG', text: `Игровые команды: /kick, /rain, /stats, /reset, /secret. Остальное — в Dev Console (🛠️)`, time: now }); return;
       }
-      io.to(roomId).emit('chat_message', { id: msgId, sender: myName, text, time: now });
+      io.to(roomId).emit('chat_message', { id: msgId, sender: myName, isAdmin, text, time: now });
     });
 
     socket.on('dev_command', ({ command }: { command: string }) => {
-      if (myName !== 'Vladislav') return;
+      if (!isAdmin) return;
+      if (typeof command !== 'string' || command.length > 500) return;
       const cmd = command.trim(); const parts = cmd.split(/\s+/); const base = parts[0].toLowerCase(); const arg = parts[1];
       const reply = (text: string, type: 'info' | 'error' | 'success' = 'info') => { socket.emit('dev_command_result', { command: cmd, text, type }); };
       const myRoomId = findRoomOfSocket(socket.id); const myRoom = myRoomId ? rooms.get(myRoomId) : null;
@@ -409,8 +391,9 @@ async function main() {
         const targetIdx = myRoom.players.findIndex(p => p.name === arg); if (targetIdx === -1) { reply(`❌ Игрок ${arg} не найден в комнате`, 'error'); return; }
         const frozen = frozenPlayers.get(myRoomId) || new Set<number>();
         if (frozen.has(targetIdx)) { frozen.delete(targetIdx); reply(`🔥 ${arg} разморожен`, 'success'); } 
-        else { frozen.add(targetIdx); reply(`❄️ ${arg} заморожен — таймер стоит`, 'success'); if (myRoom.currentPlayer === targetIdx) clearTurnTimer(myRoomId); }
+        else { frozen.add(targetIdx); reply(`❄️ ${arg} заморожен — таймер стоит`, 'success'); if (myRoom.currentPlayer === targetIdx) { clearTurnTimer(myRoomId); myRoom.turnDeadline=null; broadcastState(io,myRoomId,myRoom); } }
         frozenPlayers.set(myRoomId, frozen);
+        if (!frozen.has(targetIdx) && myRoom.currentPlayer === targetIdx) { startTurnTimer(io,myRoomId); broadcastState(io,myRoomId,myRoom); }
         io.to(myRoomId).emit('chat_message', { id: Math.random().toString(36).substring(7), sender: 'СИСТЕМА', text: frozen.has(targetIdx) ? `❄️ ${arg} заморожен` : `🔥 ${arg} разморожен`, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }); return;
       }
       if (base === '/reverse') {
@@ -419,7 +402,7 @@ async function main() {
       }
       if (base === '/broadcast') {
         const broadcastText = parts.slice(1).join(' '); if (!broadcastText) { reply('Использование: /broadcast [текст]', 'error'); return; }
-        io.emit('global_broadcast', { text: broadcastText, from: 'Vladislav' }); reply(`📢 Отправлено всем: "${broadcastText}"`, 'success'); return;
+        io.emit('global_broadcast', { text: broadcastText, from: myName }); reply(`📢 Отправлено всем: "${broadcastText}"`, 'success'); return;
       }
       if (base === '/listrooms') {
         reply(`📋 Активных комнат: ${rooms.size}`, 'success'); if (rooms.size === 0) { reply('(пусто)'); return; }
@@ -434,109 +417,75 @@ async function main() {
       reply(`❌ Неизвестная команда: ${base}`, 'error'); reply(`Доступные: /gold, /whoami, /freeze [ник], /reverse, /broadcast [текст], /listrooms, /spawnbot`);
     });
 
-    socket.on('send_reaction', ({ roomId, emoji }) => { const left = Math.floor(Math.random() * 80) + 10; io.to(roomId).emit('reaction', { id: Date.now(), emoji, sender: myName, left }); });
+    socket.on('send_reaction', ({ roomId, emoji }) => { if (!isMember(roomId) || typeof emoji !== 'string' || emoji.length > 20) return; const left = Math.floor(Math.random() * 80) + 10; io.to(roomId).emit('reaction', { id: Date.now(), emoji, sender: myName, left }); });
 
-    socket.on('play_card', async (roomId: string, cards: any[]) => {
+    socket.on('play_card', async (roomId: string, cards: any[], version: number) => {
       const room = rooms.get(roomId); if (!room || room.phase !== 'playing') return;
       const playerIndex = playersInRoom.get(roomId)?.indexOf(socket.id) ?? -1; if (playerIndex === -1) return;
       
-      const opponentIdx = (playerIndex + 1) % (room.mode === '1v1' ? 2 : 4);
-      const opponentHandSize = room.players[opponentIdx].hand.length;
-      if (opponentHandSize > 0 && cards.length > opponentHandSize) { socket.emit('error', 'Нельзя ходить картами больше, чем есть у соперника!'); return; }
-      
-      const isSpecial = validateSpecial(cards, room.trump!);
-      if (!isSpecial && cards.length > 1) { 
-        const suit = cards[0].suit; if (!cards.every(c => c.suit === suit)) { socket.emit('error', 'Ходить можно только картами одной масти!'); return; } 
-      }
-      
-      const res = applyEvent(room, { type: 'ATTACK', player: playerIndex as any, cards });
-      if (!res.ok) { socket.emit('error', `Ошибка: ${res.error}`); return; }
-      
-      rooms.set(roomId, res.state); 
-      await checkAndBroadcast(io, roomId, res.state);
+      if (!Array.isArray(cards) || cards.length > 6 || cards.some(c=>!c || typeof c !== 'object') || frozenPlayers.get(roomId)?.has(playerIndex)) return;
+      if (version !== room.stateVersion) { socket.emit('error','Ход устарел'); return; }
+      const res = applyTurn(room,{type:'ATTACK',player:playerIndex as PlayerId,cards});
+      if (!res.ok) { socket.emit('error',`Ошибка: ${res.error}`); return; }
+      roomActivity.set(roomId,Date.now());
+      await checkAndBroadcast(io,roomId,res.state);
     });
-
-    socket.on('pass_or_beat', async (roomId: string, action: 'beat' | 'pass', cards: any[]) => {
-      const room = rooms.get(roomId); if (!room || room.phase !== 'playing') return;
-      const playerIndex = playersInRoom.get(roomId)?.indexOf(socket.id) ?? -1; if (playerIndex === -1) return;
-      
-      const res = action === 'beat' 
-        ? applyEvent(room, { type: 'BEAT', player: playerIndex as any, cards })
-        : applyEvent(room, { type: 'PASS', player: playerIndex as any, cards });
-        
-      if (!res.ok) { socket.emit('error', `Ошибка: ${res.error}`); return; }
-
-      let state = res.state;
-      if (state.trick === null && state.lastTrickWinner !== null) {
-        const drawRes = applyEvent(state, { type: 'DRAW', winner: state.lastTrickWinner });
-        if (drawRes.ok) state = drawRes.state;
-      }
-      
-      rooms.set(roomId, state); 
-      await checkAndBroadcast(io, roomId, state);
+    socket.on('pass_or_beat', async (roomId: string, action: 'beat' | 'pass', cards: any[], version: number) => {
+      const room = rooms.get(roomId); if(!room || room.phase !== 'playing') return;
+      const playerIndex=playersInRoom.get(roomId)?.indexOf(socket.id) ?? -1;
+      if(playerIndex<0 || frozenPlayers.get(roomId)?.has(playerIndex) || !['beat','pass'].includes(action) || !Array.isArray(cards) || cards.length>6 || cards.some(c=>!c || typeof c !== 'object')) return;
+      if (version !== room.stateVersion) { socket.emit('error','Ход устарел'); return; }
+      const res=applyTurn(room,{type:action==='beat'?'BEAT':'PASS',player:playerIndex as PlayerId,cards});
+      if(!res.ok) {socket.emit('error',`Ошибка: ${res.error}`);return;}
+      roomActivity.set(roomId,Date.now());
+      await checkAndBroadcast(io,roomId,res.state);
     });
 
     socket.on('admin_get_rooms', async () => {
-      if (myName !== 'Vladislav') return;
+      if (!isAdmin) return;
       const roomsList = Array.from(rooms.entries()).map(([id, state]) => ({ id, mode: state.mode, phase: state.phase, round: state.roundNumber, players: state.players.map(p => p.name), matchScore: state.matchScore }));
       socket.emit('admin_rooms_list', roomsList);
     });
 
     socket.on('admin_close_room', async (roomId: string) => {
-      if (myName !== 'Vladislav') return;
+      if (!isAdmin) return;
       const room = rooms.get(roomId); if (!room) return;
-      io.to(roomId).emit('kicked', 'Комната закрыта администратором');
-      rooms.delete(roomId); playersInRoom.delete(roomId); frozenPlayers.delete(roomId); clearTurnTimer(roomId);
+      if(room.phase==='finished' && !room.settled && !roomId.startsWith('DEV-')) { await settle(roomId,room); if(!room.settled) { socket.emit('error','Результат ещё не сохранён'); return; } }
+      removeRoom(roomId,'Комната закрыта администратором');
       const roomsList = Array.from(rooms.entries()).map(([id, state]) => ({ id, mode: state.mode, phase: state.phase, round: state.roundNumber, players: state.players.map(p => p.name), matchScore: state.matchScore }));
       socket.emit('admin_rooms_list', roomsList);
     });
   });
 
+  async function settle(roomId: string, state: GameState) {
+    if(state.settled || settling.has(roomId)) return;
+    if(roomId.startsWith('DEV-')) { state.settled=true; return; }
+    settling.add(roomId);
+    try {
+      const winningSide=state.matchScore.A>=24?'B':'A';
+      await db.settleMatch(roomId,state.players.map(p=>({name:p.name,won:p.side===winningSide})));
+      state.settled=true;
+    } catch (err) { app.log.error({roomId,code:(err as any).code},'Statistics save failed; will retry'); }
+    finally { settling.delete(roomId); }
+  }
   async function checkAndBroadcast(io: Server, roomId: string, state: GameState) {
     let currentState = state;
     while (currentState.phase === 'playing' && currentState.trick && currentState.players[currentState.trick.respondent]?.hand.length === 0) {
-      const res = applyEvent(currentState, { type: 'PASS', player: currentState.trick.respondent, cards: [] });
-      if (!res.ok) break;
-      currentState = res.state;
-      if (currentState.trick === null && currentState.lastTrickWinner !== null) {
-        const drawRes = applyEvent(currentState, { type: 'DRAW', winner: currentState.lastTrickWinner });
-        if (drawRes.ok) currentState = drawRes.state;
-      }
+      const res = applyTurn(currentState, { type:'PASS',player:currentState.trick.respondent,cards:[] });
+      if(!res.ok) break; currentState=res.state;
     }
-
-    const numPlayers = currentState.mode === '1v1' ? 2 : 4;
-    const activePlayers = currentState.players.slice(0, numPlayers);
-    const endOfRound = currentState.deck.length === 0 && currentState.trick === null && activePlayers.every(p => p.hand.length === 0);
-
-    if (endOfRound && currentState.phase === 'playing') {
-      const res = applyEvent(currentState, { type: 'SCORE_ROUND' });
-      if (res.ok) {
-        rooms.set(roomId, res.state); broadcastState(io, roomId, res.state); clearTurnTimer(roomId);
-      }
-    } else { 
-      rooms.set(roomId, currentState); broadcastState(io, roomId, currentState); 
-      if (currentState.phase === 'playing') startTurnTimer(io, roomId); 
-      else if (currentState.phase === 'finished') {
-        // ФОНОВОЕ СОХРАНЕНИЕ СТАТИСТИКИ
-        if (!currentState.settled) {
-          db.getUsers().then(users => {
-            const p1Name = currentState.players[0]?.name;
-            const p2Name = currentState.players[1]?.name;
-            const p1 = users.find(u => u.username === p1Name);
-            const p2 = users.find(u => u.username === p2Name);
-            if (p1 && p2) {
-              if (currentState.matchScore.A >= 24) { p2.wins = (p2.wins || 0) + 1; p1.losses = (p1.losses || 0) + 1; }
-              else if (currentState.matchScore.B >= 24) { p1.wins = (p1.wins || 0) + 1; p2.losses = (p2.losses || 0) + 1; }
-              db.saveUsers(users).catch(console.error);
-            }
-          }).catch(console.error);
-          
-          currentState.settled = true;
-          rooms.set(roomId, currentState);
-        }
-        clearTurnTimer(roomId);
-      } else clearTurnTimer(roomId);
+    const endOfRound=currentState.deck.length===0 && !currentState.trick && currentState.players.every(p=>p.hand.length===0);
+    if(endOfRound && currentState.phase==='playing') {
+      const res=applyEvent(currentState,{type:'SCORE_ROUND'}); if(res.ok) currentState=res.state;
     }
+    rooms.set(roomId,currentState);
+    // Preserve disconnected seat status when an in-flight transition completes.
+    const seats=playersInRoom.get(roomId)||[];
+    currentState.players.forEach((p,i)=>{p.connected=Boolean(seats[i]);});
+    if(currentState.phase==='playing') startTurnTimer(io,roomId);
+    else { clearTurnTimer(roomId); currentState.turnDeadline=null; }
+    if(currentState.phase==='finished') await settle(roomId,currentState);
+    if(rooms.get(roomId)===currentState) broadcastState(io,roomId,currentState);
   }
 
   function broadcastState(io: Server, roomId: string, state: GameState) {
@@ -545,15 +494,12 @@ async function main() {
       if (sockId && sockId !== '__BOT__') {
         const legalMoves = getLegalMoves(state, index as PlayerId);
         const view = project(state, index as PlayerId, legalMoves);
-        io.to(sockId).emit('game_state', view);
+        io.to(sockId).emit('game_state', { ...view, roomId });
       }
     });
-    if (roomId === 'DEV' && state.phase === 'playing') {
-      if (botTimeouts.has(roomId)) clearTimeout(botTimeouts.get(roomId));
-      const timeout = setTimeout(() => botMove(io, roomId), 1200);
-      botTimeouts.set(roomId, timeout);
-    }
+
   }
+  await app.listen({port:PORT,host:'0.0.0.0'});
 }
 
-main().catch(console.error);
+main().catch(err=>{console.error('Server startup failed:',err.message);process.exit(1);});

@@ -9,9 +9,8 @@ import { Friends } from './Friends';
 import { MenuBackground } from './MenuBackground';
 import { DevConsole } from './DevConsole';
 
-const API_URL = 'https://kozel-server-zofore-4jhk.onreza.app';
+import { API_URL, apiFetch, checkedJson } from './api';
 const socket: Socket = io(API_URL, { auth: { token: localStorage.getItem('kozel_token') }, autoConnect: false });
-const DEV_NAME = 'Vladislav';
 
 const toastStyles = `
 @keyframes slideDownFade {
@@ -76,10 +75,10 @@ const toastStyles = `
 export function App() {
   const [user, setUser] = useState<any>(() => {
     const saved = localStorage.getItem('kozel_user');
-    return saved ? JSON.parse(saved) : null;
+    try { return saved && localStorage.getItem('kozel_token') ? JSON.parse(saved) : null; } catch { return null; }
   });
   
-  const [roomId, setRoomId] = useState<string | null>(null);
+  const [roomId, setRoomId] = useState<string | null>(() => localStorage.getItem('kozel_room'));
   const [view, setView] = useState<'menu' | 'lobby' | 'profile' | 'friends'>('menu');
   
   const [friendRequestToast, setFriendRequestToast] = useState<string | null>(null);
@@ -93,16 +92,29 @@ export function App() {
   const genericToastTimer = useRef<NodeJS.Timeout | null>(null);
   const broadcastToastTimer = useRef<NodeJS.Timeout | null>(null);
 
-  const isDev = user?.username === DEV_NAME;
+  const isDev = user?.isAdmin === true;
 
+  useEffect(() => { if (roomId) localStorage.setItem('kozel_room',roomId); else localStorage.removeItem('kozel_room'); }, [roomId]);
   useEffect(() => {
     if (user) {
       localStorage.setItem('kozel_user', JSON.stringify(user));
       if (!socket.connected) socket.connect();
-      socket.emit('register_online', user.username);
     }
   }, [user]);
 
+  useEffect(() => {
+    if (!user?.username) return;
+    let active = true;
+    apiFetch(`${API_URL}/api/me`).then(async res => {
+      if (!active) return;
+      if (res.status === 401) { handleLogout(); return; }
+      if (res.ok) { const me = await res.json(); if(active) setUser((prev:any) => prev ? {...prev,...me} : prev); }
+    }).catch(()=>{});
+    const onConnectError = (err: Error) => { if (/токен|авторизац/i.test(err.message)) handleLogout(); };
+    const onDisconnect = (reason:string) => { if(reason==='io server disconnect') handleLogout(); };
+    socket.on('connect_error',onConnectError); socket.on('disconnect',onDisconnect);
+    return () => { active=false; socket.off('connect_error',onConnectError); socket.off('disconnect',onDisconnect); };
+  }, [user?.username]);
   useEffect(() => {
     const handleReceiveInvite = ({ from, roomId }: { from: string, roomId: string }) => {
       setInviteModal({ from, roomId });
@@ -157,9 +169,10 @@ export function App() {
 
   const acceptInvite = () => {
     if (!inviteModal) return;
-    socket.emit('accept_invite', { from: inviteModal.from, roomId: inviteModal.roomId });
-    setRoomId(inviteModal.roomId);
-    setInviteModal(null);
+    socket.timeout(5000).emit('accept_invite', { roomId: inviteModal.roomId }, (err: any,res:any) => {
+      if(err || res?.error) showToast(res?.error || 'Сервер недоступен','error'); else setRoomId(res.roomId);
+      setInviteModal(null);
+    });
   };
 
   const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -176,13 +189,14 @@ export function App() {
   const handleAuth = (token: string, userData: any) => {
     localStorage.setItem('kozel_token', token);
     socket.auth = { token }; 
+    setRoomId(null);
     socket.connect();
     setUser(userData);
   };
 
   const handleLogout = () => {
-    localStorage.clear();
-    socket.disconnect();
+    ['kozel_user','kozel_token','kozel_room'].forEach(key=>localStorage.removeItem(key));
+    socket.disconnect(); socket.auth={};
     setUser(null);
     setRoomId(null);
     setView('menu');
@@ -190,7 +204,7 @@ export function App() {
   };
 
   const updateProfile = async (status: string, avatar: string) => {
-    await fetch(`${API_URL}/api/user/update`, {
+    try { await checkedJson(`${API_URL}/api/user/update`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: user.username, status, avatar })
@@ -198,6 +212,7 @@ export function App() {
     setUser({ ...user, status, avatar });
     setView('menu');
     showToast('Профиль обновлен!', 'success');
+    } catch(err:any) { showToast(err.message || 'Ошибка сохранения','error'); }
   };
 
   const handleSpawnBot = () => {
@@ -205,33 +220,22 @@ export function App() {
       showToast('Сначала выйди из текущей комнаты', 'error');
       return;
     }
-    socket.emit('create_dev_room', (res: { roomId: string }) => {
-      setRoomId(res.roomId);
+    socket.timeout(5000).emit('create_dev_room', (err: any,res: { roomId?: string; error?: string }) => {
+      if(!err && res?.roomId) setRoomId(res.roomId); else showToast(res?.error || 'Ошибка комнаты','error');
     });
   };
 
   // 🔽 МГНОВЕННЫЙ ВЫХОД И ОБНОВЛЕНИЕ СТАТИСТИКИ 🔽
   const handleExitToLobby = (finalState?: any) => {
-    if (finalState && finalState.phase === 'finished') {
-      const mySide = finalState.players[finalState.me]?.side;
-      const amIWinner = (finalState.matchScore.A >= 24 && mySide === 'B') || (finalState.matchScore.B >= 24 && mySide === 'A');
-      
-      setUser((prev: any) => {
-        const newUser = { ...prev };
-        if (amIWinner) newUser.wins = (newUser.wins || 0) + 1;
-        else newUser.losses = (newUser.losses || 0) + 1;
-        localStorage.setItem('kozel_user', JSON.stringify(newUser));
-        return newUser;
-      });
-    }
-    
+    if (roomId) socket.emit('leave_room',roomId);
     setRoomId(null);
 
-    fetch(`${API_URL}/api/user/profile/${user.username}`)
+    apiFetch(`${API_URL}/api/user/profile/${user.username}`)
       .then(res => res.ok ? res.json() : null)
       .then(data => {
         if (data) {
           setUser((prev: any) => {
+            if (!prev || prev.username !== data.username) return prev;
             const updated = { ...prev, wins: data.wins, losses: data.losses };
             localStorage.setItem('kozel_user', JSON.stringify(updated));
             return updated;
@@ -245,10 +249,10 @@ export function App() {
 
   let content;
   if (roomId) {
-    content = <Game socket={socket} roomId={roomId} setRoomId={setRoomId} username={user.username} openDevConsole={() => setDevConsoleOpen(true)} onExit={handleExitToLobby} />;
+    content = <Game key={roomId} socket={socket} roomId={roomId} setRoomId={setRoomId} username={user.username} isAdmin={isDev} openDevConsole={() => setDevConsoleOpen(true)} onExit={handleExitToLobby} />;
   }
   else if (view === 'profile') content = <ProfileSettings user={user} onSave={updateProfile} onBack={() => setView('menu')} />;
-  else if (view === 'friends') content = <Friends socket={socket} user={user} onBack={() => setView('menu')} showToast={showToast} />;
+  else if (view === 'friends') content = <Friends socket={socket} user={user} onRoom={setRoomId} onBack={() => setView('menu')} showToast={showToast} />;
   else if (view === 'lobby') content = <Lobby socket={socket} setRoomId={setRoomId} username={user.username} onBack={() => setView('menu')} />;
   else content = <Menu socket={socket} user={user} onPlay={() => setView('lobby')} onProfile={() => setView('profile')} onFriends={() => setView('friends')} onLogout={handleLogout} />;
 

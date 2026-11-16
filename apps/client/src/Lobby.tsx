@@ -5,16 +5,16 @@ export function Lobby({ socket, setRoomId, username, onBack }: { socket: Socket,
   const [joinId, setJoinId] = useState('');
 
   const createRoom = (mode: '1v1' | '2v2') => {
-    socket.emit('create_room', mode, { name: username }, (res: { roomId: string }) => {
-      setRoomId(res.roomId);
-      socket.emit('join_room', res.roomId, username);
+    socket.timeout(5000).emit('create_room', mode, (err:any,res: { roomId?: string; error?: string }) => {
+      if (!err && res?.roomId) setRoomId(res.roomId); else alert(res?.error || 'Ошибка комнаты');
     });
   };
 
   const joinRoom = () => {
     if (!joinId.trim()) return alert('Введите ID комнаты!');
-    socket.emit('join_room', joinId.trim(), username);
-    setRoomId(joinId.trim());
+    socket.timeout(5000).emit('join_room',joinId.trim(),(err:any,res:any)=>{
+      if(err || res?.error) alert(res?.error || 'Сервер недоступен'); else setRoomId(res.roomId);
+    });
   };
 
   return (
