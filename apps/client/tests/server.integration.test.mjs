@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
 import {io} from 'socket.io-client';
 
-// Run only against the dedicated local integration server. Never a public server.
+// Run only against the dedicated local integration server.
 const base=process.env.KOZEL_TEST_SERVER_URL;
 if (!base || !['127.0.0.1','localhost'].includes(new URL(base).hostname)) throw new Error('Set KOZEL_TEST_SERVER_URL to a local test server');
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
@@ -37,6 +37,7 @@ test('HTTP authorization, friends, room capacity, invitations and reconnect', {t
     const [sa,sb,sc,sd,se]=sockets;
     assert((await ack(sa,'create_dev_room')).error);
     const room=(await ack(sa,'create_room','2v2')).roomId;assert(room);
+    const roomId = room;
     assert((await ack(se,'send_invite',{roomId,to:b.username,from:a.username})).error);
     assert((await ack(sb,'accept_invite',{roomId,from:a.username})).error);
     const invitation=waitFor(sb,'receive_invite');
