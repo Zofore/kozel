@@ -253,7 +253,7 @@ const CardView = memo(({ card, onClick, selected, small, faceDown, className, is
   const isCarpet = faceDown && !isDevCard;
 
   return (
-    <div onClick={onClick} className={`card-3d ${className || ''} ${selected ? 'card-selected' : ''}`} style={{
+    <div onClick={onClick} role={onClick ? "button" : undefined} tabIndex={onClick ? 0 : undefined} aria-label={onClick ? `${card.rank} ${card.suit}` : undefined} aria-pressed={onClick ? Boolean(selected) : undefined} onKeyDown={onClick ? e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined} className={`card-3d ${small ? "card-small" : "card-full"} ${className || ''} ${selected ? 'card-selected' : ''}`} style={{
       width: small ? '50px' : '70px', height: small ? '75px' : '105px', 
       background: isDevCard ? 'none' : (faceDown ? 'transparent' : '#fff'), 
       border: faceDown ? (isDevCard ? '2px solid #000' : 'none') : 'none',
@@ -328,10 +328,10 @@ const DiceRollScreen = ({ gameState }: { gameState: any }) => {
   const winner = gameState.players.find((p: any) => gameState.diceRolls[p.id] === maxRoll);
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'radial-gradient(circle at center, #1e3a2a 0%, #0d1b14 100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+    <div className="mobile-dice-screen" style={{ position: 'fixed', inset: 0, background: 'radial-gradient(circle at center, #1e3a2a 0%, #0d1b14 100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
       <style>{floatingEmojiStyle}</style>
       <h1 style={{ color: '#f0c674', fontSize: 48, marginBottom: 40, textShadow: '0 4px 10px rgba(0,0,0,0.5)' }}>{rolling ? 'Бросок костей...' : 'Кости брошены!'}</h1>
-      <div style={{ display: 'flex', gap: 40, marginBottom: 50 }}>
+      <div className="mobile-dice-grid" style={{ display: 'flex', gap: 40, marginBottom: 50 }}>
         {gameState.players.map((p: any) => (
           <div key={p.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <div className={p.isAdmin ? 'dev-avatar-frame' : ''} style={{ marginBottom: 10 }}><img src={getAvatar(p.name)} style={{ width: 60, height: 60, borderRadius: '50%', background: '#fff', border: p.isAdmin ? 'none' : '2px solid #f0c674' }} /></div>
@@ -457,9 +457,9 @@ export function Game({ socket, roomId, setRoomId, username, isAdmin = false, ope
 
   if (gameState.roundNumber === 0 && gameState.phase !== 'dice-roll') {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'radial-gradient(circle, #1a1a2e 0%, #0f3460 100%)', color: 'white', padding: 20 }}>
+      <div className="mobile-screen" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'radial-gradient(circle, #1a1a2e 0%, #0f3460 100%)', color: 'white', padding: 20 }}>
         <style>{floatingEmojiStyle}</style>
-        <div style={{ background: 'rgba(37, 37, 64, 0.9)', padding: 40, borderRadius: 20, border: '2px solid #f0c674', textAlign: 'center', maxWidth: 400, boxShadow: '0 10px 30px rgba(0,0,0,0.8)' }}>
+        <div className="mobile-panel" style={{ background: 'rgba(37, 37, 64, 0.9)', padding: 40, borderRadius: 20, border: '2px solid #f0c674', textAlign: 'center', maxWidth: 400, boxShadow: '0 10px 30px rgba(0,0,0,0.8)' }}>
           <div style={{ fontSize: 60, marginBottom: 20 }}>⏳</div><h2 style={{ color: '#f0c674', margin: '0 0 20px 0' }}>Ожидание игроков...</h2>
           <p style={{ color: '#ccc', marginBottom: 20 }}>Отправьте ID комнаты другу, чтобы он присоединился</p>
           <div style={{ background: '#1a1a2e', padding: 15, borderRadius: 8, fontSize: 16, fontWeight: 'bold', overflowWrap:'anywhere', letterSpacing: 1, color: '#f0c674', marginBottom: 20 }}>{roomId}</div>
@@ -499,13 +499,13 @@ export function Game({ socket, roomId, setRoomId, username, isAdmin = false, ope
     }
 
     return (
-      <div onClick={unlockAudio} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', background: isFinished ? (titleColor === '#ffd700' ? 'radial-gradient(circle, #2a2a10 0%, #0a0a05 100%)' : 'radial-gradient(circle, #2a1010 0%, #0a0505 100%)') : '#1a1a2e', position: 'relative', overflow: 'hidden' }}>
+      <div className="mobile-screen mobile-result" onClick={unlockAudio} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', background: isFinished ? (titleColor === '#ffd700' ? 'radial-gradient(circle, #2a2a10 0%, #0a0a05 100%)' : 'radial-gradient(circle, #2a1010 0%, #0a0505 100%)') : '#1a1a2e', position: 'relative', overflow: 'hidden' }}>
         <style>{floatingEmojiStyle}</style>
         {floatingEmojis.map(e => <div key={e.id} className="floating-emoji" style={{ left: `${e.left}%` }}>{e.emoji}</div>)}
         {rainEmojis.map(e => <div key={e.id} className="rain-emoji" style={{ left: `${e.left}%`, animationDuration: `${e.duration}s` }}>{e.emoji}</div>)}
         {matchConfetti.map(e => <div key={e.id} className="gold-emoji" style={{ left: `${e.left}%`, animationDuration: `${e.duration}s`, fontSize: 40 }}>{e.emoji}</div>)}
 
-        <div style={{ padding: 40, textAlign: 'center', color: 'white', maxWidth: 600, background: 'rgba(20, 20, 35, 0.95)', backdropFilter: 'blur(10px)', borderRadius: 16, boxShadow: isFinished ? `0 10px 30px rgba(0,0,0,0.8), 0 0 40px ${titleColor}40` : '0 10px 30px rgba(0,0,0,0.5)', border: `2px solid ${titleColor}`, zIndex: 10 }}>
+        <div className="mobile-panel" style={{ padding: 40, textAlign: 'center', color: 'white', maxWidth: 600, background: 'rgba(20, 20, 35, 0.95)', backdropFilter: 'blur(10px)', borderRadius: 16, boxShadow: isFinished ? `0 10px 30px rgba(0,0,0,0.8), 0 0 40px ${titleColor}40` : '0 10px 30px rgba(0,0,0,0.5)', border: `2px solid ${titleColor}`, zIndex: 10 }}>
           <h1 style={{ color: titleColor, fontSize: isFinished ? 42 : 32, textShadow: `0 0 20px ${titleColor}80`, marginBottom: 10 }}>{matchTitle}</h1>
           {isFinished && <p style={{ color: '#ccc', fontSize: 18, marginBottom: 30 }}>{matchEmotion}</p>}
           
@@ -554,7 +554,7 @@ export function Game({ socket, roomId, setRoomId, username, isAdmin = false, ope
 
   return (
     <LayoutGroup>
-      <div onClick={unlockAudio} style={{
+      <div className="mobile-game" onClick={unlockAudio} style={{
         display: 'flex', flexDirection: 'column', height: '100vh',
         background: '#1a1a2e', position: 'relative', overflow: 'hidden',
         transform: isReversed ? 'rotate(180deg)' : 'none',
@@ -580,9 +580,9 @@ export function Game({ socket, roomId, setRoomId, username, isAdmin = false, ope
           </div>
         )}
 
-        <div style={{ position: 'absolute', bottom: 20, right: 20, zIndex: 100 }}>
+        <div className={`mobile-chat ${chatOpen ? "mobile-chat-open" : ""}`} style={{ position: 'absolute', bottom: 20, right: 20, zIndex: 100 }}>
           {chatOpen ? (
-            <div style={{ width: 300, height: 400, background: '#252540', borderRadius: 12, border: '2px solid #f0c674', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 30px rgba(0,0,0,0.8)' }}>
+            <div className="mobile-chat-panel" style={{ width: 300, height: 400, background: '#252540', borderRadius: 12, border: '2px solid #f0c674', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 30px rgba(0,0,0,0.8)' }}>
               <div style={{ padding: 10, background: '#1a1a2e', borderTopLeftRadius: 10, borderTopRightRadius: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #444' }}>
                 <span style={{ fontWeight: 'bold', color: '#f0c674' }}>💬 Чат</span>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -624,7 +624,7 @@ export function Game({ socket, roomId, setRoomId, username, isAdmin = false, ope
           )}
         </div>
 
-        <div style={{ background: '#252540', padding: '15px 30px', display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', borderBottom: '2px solid #444' }}>
+        <div className="mobile-game-header" style={{ background: '#252540', padding: '15px 30px', display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', borderBottom: '2px solid #444' }}>
           <div style={{ justifySelf: 'start', display: 'flex', alignItems: 'center', gap: 15 }}>
             <div title={roomId} onClick={()=>navigator.clipboard?.writeText(roomId).catch(()=>{})} style={{ color: '#f0c674', fontSize: '14px', fontWeight: 'bold', cursor:'pointer' }}>ID: {roomId.slice(0,8)}…</div>
             {isDev && openDevConsole && <button onClick={openDevConsole} title="Dev Console (` тильда)" style={{ background: 'transparent', border: '1px solid #ffd700', color: '#ffd700', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', gap: 4 }}>🛠️ Dev</button>}
@@ -646,9 +646,9 @@ export function Game({ socket, roomId, setRoomId, username, isAdmin = false, ope
           </div>
         </div>
 
-        {<div style={{display:'flex',flexWrap:'wrap',justifyContent:'center',gap:10,padding:8,background:'#252540',color:'white'}}>{gameState.players.map((p:any)=><span key={p.id} style={{color:p.id===gameState.currentPlayer?'#f0c674':'#ccc',border:'1px solid #555',borderRadius:8,padding:5}}>{p.side} · {p.name} · {p.handCount} карт{!p.connected?' · не в сети':''}{p.id===gameState.me?' · вы':''}</span>)}</div>}
+        {<div className="mobile-player-list" style={{display:'flex',flexWrap:'wrap',justifyContent:'center',gap:10,padding:8,background:'#252540',color:'white'}}>{gameState.players.map((p:any)=><span key={p.id} style={{color:p.id===gameState.currentPlayer?'#f0c674':'#ccc',border:'1px solid #555',borderRadius:8,padding:5}}>{p.side} · {p.name} · {p.handCount} карт{!p.connected?' · не в сети':''}{p.id===gameState.me?' · вы':''}</span>)}</div>}
         <div className="felt-table" style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', padding: '20px 40px', alignItems: 'flex-start' }}>
+          <div className="mobile-table-top" style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', padding: '20px 40px', alignItems: 'flex-start' }}>
             <div style={{ justifySelf: 'start', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '10px', color: gameState.players[0]?.isAdmin ? undefined : '#ccc' }} className={gameState.players[0]?.isAdmin ? 'dev-nick' : ''}>
                 <img src={getAvatar(gameState.players[0]?.name)} style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff' }} />{gameState.players[0]?.isAdmin && '👑 '}{gameState.players[0]?.name}
@@ -693,14 +693,14 @@ export function Game({ socket, roomId, setRoomId, username, isAdmin = false, ope
             </div>
           </div>
 
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+          <div className="mobile-trick" style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
             {gameState.trick ? (
               <>
                 <div style={{ color: '#ccc', fontSize: '18px', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(0,0,0,0.4)', padding: '5px 15px', borderRadius: '20px' }}>
                   Ходил: <span className={gameState.players[gameState.trick.attacker]?.isAdmin ? 'dev-nick' : ''} style={{ color: gameState.players[gameState.trick.attacker]?.isAdmin ? undefined : '#f0c674', fontWeight: 'bold' }}>{gameState.players[gameState.trick.attacker]?.isAdmin && '👑 '}{gameState.players[gameState.trick.attacker]?.name}</span>
                   <div className={gameState.players[gameState.trick.attacker]?.isAdmin ? 'dev-avatar-frame' : ''}><img src={getAvatar(gameState.players[gameState.trick.attacker]?.name)} style={{ width: 25, height: 25, borderRadius: '50%', background: '#fff' }} /></div>
                 </div>
-                <div style={{ display: 'flex', paddingLeft: '20px' }}>
+                <div className="mobile-trick-cards" style={{ display: 'flex', paddingLeft: '20px' }}>
                   {gameState.trick.cardsOnTable.map((card: any, i: number) => (
                     <motion.div key={i} layoutId={`${card.rank}_${card.suit}`} style={{ marginLeft: '-20px', zIndex: i }}>
                       <CardView card={card} />
@@ -712,9 +712,9 @@ export function Game({ socket, roomId, setRoomId, username, isAdmin = false, ope
           </div>
         </div>
 
-        <div style={{ background: '#1a1a2e', padding: '15px', borderTop: '2px solid #444', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <div className="mobile-controls" style={{ background: '#1a1a2e', padding: '15px', borderTop: '2px solid #444', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           {errorMsg && <div style={{ background: '#d32f2f', padding: '10px', borderRadius: '8px', marginBottom: '15px', fontWeight: 'bold' }}>{errorMsg}</div>}
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '15px', minHeight: '120px' }}>
+          <div className="mobile-hand" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '15px', minHeight: '120px' }}>
             {gameState.hand.map((card: any, index: number) => {
               const isSelected = selectedCards.some(c => c.suit === card.suit && c.rank === card.rank);
               const cardStr = `${card.rank}_${card.suit}`;
@@ -732,7 +732,7 @@ export function Game({ socket, roomId, setRoomId, username, isAdmin = false, ope
               );
             })}
           </div>
-          <div style={{ display: 'flex', gap: '15px', height: '44px', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="mobile-actions" style={{ display: 'flex', gap: '15px', height: '44px', alignItems: 'center', justifyContent: 'center' }}>
             {isMyTurn && !gameState.trick && legalSelection && (
               <button onClick={playCards} style={{ padding: '10px 30px', background: '#f0c674', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', color: '#000', boxShadow: '0 4px 0 #b08d40' }}>Сделать ход</button>
             )}

@@ -18,7 +18,7 @@ export function Lobby({ socket, setRoomId, username, onBack }: { socket: Socket,
   };
 
   return (
-    <div style={{ padding: 20, height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', background: 'transparent' }}>
+    <div className="mobile-screen" style={{ padding: 20, height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', background: 'transparent' }}>
       
       {/* Обертка, которая центрирует и кнопку, и окно */}
       <div style={{ width: '100%', maxWidth: 400, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -50,7 +50,7 @@ export function Lobby({ socket, setRoomId, username, onBack }: { socket: Socket,
         </button>
 
         {/* Окно лобби */}
-        <div style={{ width: '100%', background: 'rgba(37, 37, 64, 0.85)', backdropFilter: 'blur(10px)', padding: 30, borderRadius: 20, border: '2px solid #f0c674', boxShadow: '0 10px 30px rgba(0,0,0,0.8)', textAlign: 'center' }}>
+        <div className="mobile-panel" style={{ width: '100%', background: 'rgba(37, 37, 64, 0.85)', backdropFilter: 'blur(10px)', padding: 30, borderRadius: 20, border: '2px solid #f0c674', boxShadow: '0 10px 30px rgba(0,0,0,0.8)', textAlign: 'center' }}>
           <h1 style={{ color: '#f0c674', fontSize: 36, marginBottom: 10, marginTop: 0 }}>Лобби</h1>
           <p style={{ color: 'white', marginBottom: 30 }}>Вы вошли как: <strong>{username}</strong></p>
           

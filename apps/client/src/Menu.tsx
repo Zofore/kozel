@@ -47,13 +47,13 @@ export function Menu({ socket, user, onPlay, onProfile, onFriends, onLogout }: {
   const isDev = user.isAdmin === true;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'transparent', color: 'white', position: 'relative' }}>
+    <div className="mobile-screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'transparent', color: 'white', position: 'relative' }}>
       
       <style>{devStyles}</style>
 
       {adminOpen && <AdminPanel socket={socket} username={user.username} onClose={() => setAdminOpen(false)} />}
 
-      <div style={{ background: 'rgba(37, 37, 64, 0.85)', backdropFilter: 'blur(10px)', padding: 40, borderRadius: 20, boxShadow: '0 10px 30px rgba(0,0,0,0.8), 0 0 20px rgba(240,198,116,0.2)', border: isDev ? '2px solid #ffd700' : '2px solid #f0c674', textAlign: 'center', width: 320 }}>
+      <div className="mobile-panel" style={{ background: 'rgba(37, 37, 64, 0.85)', backdropFilter: 'blur(10px)', padding: 40, borderRadius: 20, boxShadow: '0 10px 30px rgba(0,0,0,0.8), 0 0 20px rgba(240,198,116,0.2)', border: isDev ? '2px solid #ffd700' : '2px solid #f0c674', textAlign: 'center', width: 320 }}>
         
         <div style={{ margin: '0 auto 15px', display: 'inline-block' }}>
           <div className={isDev ? 'dev-avatar-frame' : ''} style={{ display: 'inline-flex', padding: isDev ? undefined : 0 }}>
@@ -101,7 +101,7 @@ export function Menu({ socket, user, onPlay, onProfile, onFriends, onLogout }: {
       {isDev && (
         <button
           onClick={() => setAdminOpen(true)}
-          title="Админ-панель"
+          className="mobile-admin-button" title="Админ-панель"
           style={{
             position: 'fixed', bottom: 20, right: 20,
             width: 45, height: 45, borderRadius: '50%',

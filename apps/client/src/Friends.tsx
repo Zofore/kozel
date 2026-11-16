@@ -95,11 +95,11 @@ export function Friends({ socket, user, onRoom, onBack, showToast }: { socket: S
   };
 
   return (
-    <div style={{ padding: 20, maxWidth: 500, margin: '0 auto', background: 'transparent', minHeight: '100vh', color: 'white', position: 'relative' }}>
+    <div className="mobile-friends" style={{ padding: 20, maxWidth: 500, margin: '0 auto', background: 'transparent', minHeight: '100vh', color: 'white', position: 'relative' }}>
       
       {friendToDelete && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10001 }}>
-          <div style={{ background: 'linear-gradient(180deg, #252540, #1a1a2e)', border: '2px solid #f44336', borderRadius: 16, padding: 30, textAlign: 'center', color: 'white', width: 320, boxShadow: '0 20px 50px rgba(0,0,0,0.8)' }}>
+        <div className="mobile-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10001 }}>
+          <div className="mobile-dialog" style={{ background: 'linear-gradient(180deg, #252540, #1a1a2e)', border: '2px solid #f44336', borderRadius: 16, padding: 30, textAlign: 'center', color: 'white', width: 320, boxShadow: '0 20px 50px rgba(0,0,0,0.8)' }}>
             <div style={{ fontSize: 40, marginBottom: 10 }}>🤔</div>
             <h3 style={{ color: 'white', margin: '0 0 10px 0' }}>Удалить друга?</h3>
             <p style={{ fontSize: 14, color: '#ccc', marginBottom: 20 }}>Вы уверены, что хотите удалить <b>{friendToDelete}</b> из списка друзей?</p>
@@ -120,7 +120,7 @@ export function Friends({ socket, user, onRoom, onBack, showToast }: { socket: S
         <div style={{ marginBottom: 30, background: 'rgba(37, 37, 64, 0.8)', backdropFilter: 'blur(5px)', padding: 15, borderRadius: 12, border: '1px solid #f0c674' }}>
           <h3 style={{ color: '#f0c674', fontSize: 16, marginTop: 0 }}>🔔 Заявки в друзья ({requests.length}):</h3>
           {requests.map(r => (
-            <div key={r.username} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(0,0,0,0.3)', padding: 10, borderRadius: 8, marginBottom: 10 }}>
+            <div key={r.username} className="mobile-friend-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(0,0,0,0.3)', padding: 10, borderRadius: 8, marginBottom: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#333', overflow: 'hidden' }}>
                   {r.avatar ? <img src={r.avatar} style={{ width: '100%', height: '100%' }} /> : <div style={{ textAlign: 'center', lineHeight: '40px' }}>👤</div>}
@@ -155,7 +155,7 @@ export function Friends({ socket, user, onRoom, onBack, showToast }: { socket: S
         <div style={{ marginBottom: 30 }}>
           <h3 style={{ color: '#aaa', fontSize: 16 }}>Результаты поиска:</h3>
           {searchResults.map(u => (
-            <div key={u.username} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(37, 37, 64, 0.9)', backdropFilter: 'blur(5px)', padding: 10, borderRadius: 8, marginBottom: 10 }}>
+            <div key={u.username} className="mobile-friend-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(37, 37, 64, 0.9)', backdropFilter: 'blur(5px)', padding: 10, borderRadius: 8, marginBottom: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#333', overflow: 'hidden' }}>
                   {u.avatar ? <img src={u.avatar} style={{ width: '100%', height: '100%' }} /> : <div style={{ textAlign: 'center', lineHeight: '40px' }}>👤</div>}
@@ -184,7 +184,7 @@ export function Friends({ socket, user, onRoom, onBack, showToast }: { socket: S
       {friends.length === 0 && <p style={{ color: '#aaa' }}>У тебя пока нет друзей. Найди кого-нибудь!</p>}
       
       {friends.map(f => (
-        <div key={f.username} style={{ display: 'flex', alignItems: 'center', background: 'rgba(37, 37, 64, 0.9)', backdropFilter: 'blur(5px)', padding: 10, borderRadius: 8, marginBottom: 10 }}>
+        <div key={f.username} className="mobile-friend-row" style={{ display: 'flex', alignItems: 'center', background: 'rgba(37, 37, 64, 0.9)', backdropFilter: 'blur(5px)', padding: 10, borderRadius: 8, marginBottom: 10 }}>
           <div style={{ width: 45, height: 45, borderRadius: '50%', background: '#333', overflow: 'hidden', marginRight: 15, border: f.online ? '2px solid #4caf50' : '2px solid transparent' }}>
             {f.avatar ? <img src={f.avatar} style={{ width: '100%', height: '100%' }} /> : <div style={{ textAlign: 'center', lineHeight: '45px' }}>👤</div>}
           </div>
