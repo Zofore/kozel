@@ -44,8 +44,8 @@ export function Auth({ onAuth }: { onAuth: (token: string, user: any) => void })
   };
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: 'radial-gradient(circle, #1a1a2e 0%, #0f3460 100%)', color: 'white' }}>
-      <div style={{ background: 'rgba(37, 37, 64, 0.85)', backdropFilter: 'blur(10px)', padding: 40, borderRadius: 20, boxShadow: '0 10px 30px rgba(0,0,0,0.8), 0 0 20px rgba(240,198,116,0.2)', border: '2px solid #f0c674', textAlign: 'center', width: 320 }}>
+    <div className="mobile-screen" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: 'radial-gradient(circle, #1a1a2e 0%, #0f3460 100%)', color: 'white' }}>
+      <div className="mobile-panel" style={{ background: 'rgba(37, 37, 64, 0.85)', backdropFilter: 'blur(10px)', padding: 40, borderRadius: 20, boxShadow: '0 10px 30px rgba(0,0,0,0.8), 0 0 20px rgba(240,198,116,0.2)', border: '2px solid #f0c674', textAlign: 'center', width: 320 }}>
         
         {/* 🔽 3D КОЗЁЛ НА ЭКРАНЕ ВХОДА 🔽 */}
         <Goat3D />

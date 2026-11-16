@@ -9,8 +9,8 @@ export function ProfileSettings({ user, onSave, onBack }: { user: any, onSave: (
   const defaultAvatar = `https://api.dicebear.com/7.x/adventurer/svg?seed=${user.username}`;
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: 'transparent', color: 'white' }}>
-      <div style={{ background: 'rgba(37, 37, 64, 0.85)', backdropFilter: 'blur(10px)', padding: 40, borderRadius: 20, boxShadow: '0 10px 30px rgba(0,0,0,0.8)', border: '2px solid #f0c674', textAlign: 'center', width: 320 }}>
+    <div className="mobile-screen" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: 'transparent', color: 'white' }}>
+      <div className="mobile-panel" style={{ background: 'rgba(37, 37, 64, 0.85)', backdropFilter: 'blur(10px)', padding: 40, borderRadius: 20, boxShadow: '0 10px 30px rgba(0,0,0,0.8)', border: '2px solid #f0c674', textAlign: 'center', width: 320 }}>
         
         <h2 style={{ color: '#f0c674', margin: '0 0 20px 0' }}>Настройки профиля</h2>
 

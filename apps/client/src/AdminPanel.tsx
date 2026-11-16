@@ -18,12 +18,12 @@ export function AdminPanel({ socket, username, onClose }: { socket: Socket, user
   };
 
   return (
-    <div style={{
+    <div className="mobile-overlay" style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       zIndex: 10000, backdropFilter: 'blur(5px)'
     }}>
-      <div style={{
+      <div className="mobile-admin-panel" style={{
         background: 'linear-gradient(180deg, #1a1a2e, #0f3460)',
         border: '2px solid #ffd700', borderRadius: 16, padding: 30,
         width: '90%', maxWidth: 700, maxHeight: '80vh', overflowY: 'auto',
