@@ -6,9 +6,9 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "noImplicitAny": false,
-    "paths": {
-      "@kozel/game-core": ["../../packages/game-core/dist/index.d.ts"]
-    }
+    "strict": true
   },
-  "include": ["src/**/*"]
+  "include": [
+    "src/**/*"
+  ]
 }

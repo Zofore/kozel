@@ -5,16 +5,16 @@ export function AdminPanel({ socket, username, onClose }: { socket: Socket, user
   const [rooms, setRooms] = useState<any[]>([]);
 
   useEffect(() => {
-    socket.emit('admin_get_rooms', username);
     const onList = (list: any[]) => setRooms(list);
     socket.on('admin_rooms_list', onList);
+    socket.emit('admin_get_rooms');
     return () => { socket.off('admin_rooms_list', onList); };
   }, [socket, username]);
 
-  const refresh = () => socket.emit('admin_get_rooms', username);
+  const refresh = () => socket.emit('admin_get_rooms');
   const closeRoom = (roomId: string) => {
     if (!window.confirm(`Закрыть комнату ${roomId}?`)) return;
-    socket.emit('admin_close_room', username, roomId);
+    socket.emit('admin_close_room', roomId);
   };
 
   return (

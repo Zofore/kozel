@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, memo } from 'react';
 import { Socket } from 'socket.io-client';
 import { motion, LayoutGroup } from 'framer-motion';
 
-const DEV_NAME = 'Vladislav';
 const SUIT_MAP: any = { '♠': 'S', '♥': 'H', '♦': 'D', '♣': 'C' };
 const getAvatar = (name: string) => `https://api.dicebear.com/7.x/adventurer/svg?seed=${name || 'default'}`;
 
@@ -335,8 +334,8 @@ const DiceRollScreen = ({ gameState }: { gameState: any }) => {
       <div style={{ display: 'flex', gap: 40, marginBottom: 50 }}>
         {gameState.players.map((p: any) => (
           <div key={p.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <div className={p.name === DEV_NAME ? 'dev-avatar-frame' : ''} style={{ marginBottom: 10 }}><img src={getAvatar(p.name)} style={{ width: 60, height: 60, borderRadius: '50%', background: '#fff', border: p.name === DEV_NAME ? 'none' : '2px solid #f0c674' }} /></div>
-            <div style={{ marginBottom: 15, display: 'flex', alignItems: 'center', gap: 5 }}>{p.name === DEV_NAME && <span>👑</span>}<span className={p.name === DEV_NAME ? 'dev-nick' : ''} style={{ color: p.name === DEV_NAME ? undefined : 'white', fontWeight: 'bold' }}>{p.name}</span></div>
+            <div className={p.isAdmin ? 'dev-avatar-frame' : ''} style={{ marginBottom: 10 }}><img src={getAvatar(p.name)} style={{ width: 60, height: 60, borderRadius: '50%', background: '#fff', border: p.isAdmin ? 'none' : '2px solid #f0c674' }} /></div>
+            <div style={{ marginBottom: 15, display: 'flex', alignItems: 'center', gap: 5 }}>{p.isAdmin && <span>👑</span>}<span className={p.isAdmin ? 'dev-nick' : ''} style={{ color: p.isAdmin ? undefined : 'white', fontWeight: 'bold' }}>{p.name}</span></div>
             <Dice value={gameState.diceRolls[p.id]} rolling={rolling} />
             <div style={{ marginTop: 15, fontSize: 20, fontWeight: 'bold', color: gameState.diceRolls[p.id] === maxRoll ? '#4caf50' : '#aaa' }}>{gameState.diceRolls[p.id]}</div>
           </div>
@@ -347,7 +346,7 @@ const DiceRollScreen = ({ gameState }: { gameState: any }) => {
   );
 };
 
-export function Game({ socket, roomId, setRoomId, username, openDevConsole, onExit }: { socket: Socket, roomId: string, setRoomId: any, username: string, openDevConsole?: () => void, onExit: (state?: any) => void }) {
+export function Game({ socket, roomId, setRoomId, username, isAdmin = false, openDevConsole, onExit }: { socket: Socket, roomId: string, setRoomId: any, username: string, isAdmin?: boolean, openDevConsole?: () => void, onExit: (state?: any) => void }) {
   const [gameState, setGameState] = useState<any>(null);
   const [selectedCards, setSelectedCards] = useState<any[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -381,6 +380,7 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole, onEx
 
   useEffect(() => {
     const onState = (state: any) => { 
+      if (state.roomId !== roomId) return;
       if (prevState.current) {
         if (state.trumpChanged && !prevState.current.trumpChanged) {
           setTrumpAlert(state.trumpChangeEvent?.card || state.trumpCard); setTimeout(() => setTrumpAlert(null), 3000); playSound('trump');
@@ -421,7 +421,8 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole, onEx
       setTimeout(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, 100);
     };
     const onReaction = (data: any) => { playSound('pop'); setFloatingEmojis(prev => [...prev, data]); setTimeout(() => { setFloatingEmojis(prev => prev.filter(e => e.id !== data.id)); }, 2500); };
-    const onKicked = (msg: string) => { setErrorMsg(msg); setTimeout(() => setRoomId(null), 1500); };
+    let kickedTimer: ReturnType<typeof setTimeout> | undefined;
+    const onKicked = (msg: string) => { setErrorMsg(msg); if(kickedTimer) clearTimeout(kickedTimer); kickedTimer=setTimeout(() => setRoomId((current:string|null)=>current===roomId?null:current), 1500); };
     const onAdminRain = () => {
       playSound('rain'); const emojis = ['🎉', '🎊', '💰', '🍀', '👑', '🔥', '⭐', '💎', '🎁', '💵'];
       const newRain = Array.from({ length: 60 }).map((_, i) => ({ id: Date.now() + i, emoji: emojis[Math.floor(Math.random() * emojis.length)], left: Math.random() * 100, duration: 2 + Math.random() * 3 }));
@@ -437,9 +438,13 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole, onEx
     const onAdminReverse = () => { playSound('reverse'); setIsReversed(true); setTimeout(() => setIsReversed(false), 2000); };
 
     socket.on('game_state', onState); socket.on('error', onError); socket.on('chat_message', onChatMessage); socket.on('reaction', onReaction); socket.on('kicked', onKicked); socket.on('admin_rain', onAdminRain); socket.on('dev_joined', onDevJoined); socket.on('admin_secret_fx', onAdminSecretFx); socket.on('admin_gold', onAdminGold); socket.on('admin_reverse', onAdminReverse);
-    socket.emit('join_room', roomId, username);
+    const join = () => socket.emit('join_room',roomId);
+    socket.on('connect',join);
+    if(socket.connected) join();
     
     return () => { 
+      if(kickedTimer) clearTimeout(kickedTimer);
+      socket.off('connect',join);
       socket.off('game_state', onState); socket.off('error', onError); socket.off('chat_message', onChatMessage); socket.off('reaction', onReaction); socket.off('kicked', onKicked); socket.off('admin_rain', onAdminRain); socket.off('dev_joined', onDevJoined); socket.off('admin_secret_fx', onAdminSecretFx); socket.off('admin_gold', onAdminGold); socket.off('admin_reverse', onAdminReverse);
     };
   }, [socket, roomId, username]);
@@ -448,7 +453,7 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole, onEx
   const sendEmoji = (emoji: string) => { socket.emit('send_reaction', { roomId, emoji, sender: username }); setEmojiPickerOpen(false); };
   const unlockAudio = () => { if (!globalAudioCtx) globalAudioCtx = new (window.AudioContext || (window as any).webkitAudioContext)(); if (globalAudioCtx.state === 'suspended') globalAudioCtx.resume(); };
 
-  if (!gameState) return <div style={{ padding: 20, color: 'white', textAlign: 'center', fontSize: 24 }}>Загрузка стола...</div>;
+  if (!gameState) return <div style={{ padding: 20, color: 'white', textAlign: 'center', fontSize: 24 }}>{errorMsg || 'Загрузка стола...'}<div><button onClick={()=>onExit()}>Выйти</button></div></div>;
 
   if (gameState.roundNumber === 0 && gameState.phase !== 'dice-roll') {
     return (
@@ -457,13 +462,15 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole, onEx
         <div style={{ background: 'rgba(37, 37, 64, 0.9)', padding: 40, borderRadius: 20, border: '2px solid #f0c674', textAlign: 'center', maxWidth: 400, boxShadow: '0 10px 30px rgba(0,0,0,0.8)' }}>
           <div style={{ fontSize: 60, marginBottom: 20 }}>⏳</div><h2 style={{ color: '#f0c674', margin: '0 0 20px 0' }}>Ожидание игроков...</h2>
           <p style={{ color: '#ccc', marginBottom: 20 }}>Отправьте ID комнаты другу, чтобы он присоединился</p>
-          <div style={{ background: '#1a1a2e', padding: 15, borderRadius: 8, fontSize: 24, fontWeight: 'bold', letterSpacing: 3, color: '#f0c674', marginBottom: 20 }}>{roomId}</div>
+          <div style={{ background: '#1a1a2e', padding: 15, borderRadius: 8, fontSize: 16, fontWeight: 'bold', overflowWrap:'anywhere', letterSpacing: 1, color: '#f0c674', marginBottom: 20 }}>{roomId}</div>
+          <button onClick={()=>navigator.clipboard?.writeText(roomId).catch(()=>{})} style={{marginBottom:12,padding:'8px 16px',background:'transparent',border:'1px solid #f0c674',color:'#f0c674',borderRadius:8}}>Копировать ID</button>
           <button onClick={() => { playSound('click'); onExit(gameState); }} style={{ padding: '12px 30px', background: 'transparent', color: '#f44336', border: '1px solid #f44336', borderRadius: 8, fontSize: 16, cursor: 'pointer', width: '100%' }}>Отменить</button>
         </div>
       </div>
     );
   }
 
+  const teamName = (side:string) => gameState.players.filter((p:any)=>p.side===side).map((p:any)=>p.name).join(' / ');
   if (gameState.phase === 'dice-roll') return <DiceRollScreen gameState={gameState} />;
 
   if (gameState.phase === 'round-scored' || gameState.phase === 'finished') {
@@ -506,7 +513,7 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole, onEx
             <div style={{ background: 'rgba(255,255,255,0.1)', padding: 15, borderRadius: 12, margin: '20px 0' }}>
               <h3 style={{ margin: '0 0 10px 0', color: '#aaa', fontSize: 16 }}>Очки за кон (карты):</h3>
               <div style={{ display: 'flex', justifyContent: 'space-around', fontSize: 18 }}>
-                <span>{gameState.players[0]?.name}: <b style={{ color: 'white' }}>{ptsA}</b></span><span>{gameState.players[1]?.name}: <b style={{ color: 'white' }}>{ptsB}</b></span>
+                <span>{teamName('A')}: <b style={{ color: 'white' }}>{ptsA}</b></span><span>{teamName('B')}: <b style={{ color: 'white' }}>{ptsB}</b></span>
               </div>
               {ptsA === 60 && ptsB === 60 && <div style={{ color: '#f0c674', marginTop: 10, fontWeight: 'bold' }}>ЯЙЦА! (60:60)</div>}
             </div>
@@ -514,13 +521,13 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole, onEx
           <div style={{ fontSize: 20, margin: '30px 0', lineHeight: '1.6', background: 'rgba(0,0,0,0.4)', padding: 20, borderRadius: 12, border: '1px solid #333' }}>
             <h3 style={{ margin: '0 0 15px 0', color: '#aaa', fontSize: 16 }}>Штрафные баллы (до 24):</h3>
             <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
-              <div style={{ color: colorA }}><div style={{ fontSize: 16, marginBottom: 5 }}>{gameState.players[0]?.name}</div><div style={{ fontSize: 32, fontWeight: 'bold' }}>{scoreA}</div></div>
+              <div style={{ color: colorA }}><div style={{ fontSize: 16, marginBottom: 5 }}>{teamName('A')}</div><div style={{ fontSize: 32, fontWeight: 'bold' }}>{scoreA}</div></div>
               <div style={{ color: '#555', fontSize: 24 }}>—</div>
-              <div style={{ color: colorB }}><div style={{ fontSize: 16, marginBottom: 5 }}>{gameState.players[1]?.name}</div><div style={{ fontSize: 32, fontWeight: 'bold' }}>{scoreB}</div></div>
+              <div style={{ color: colorB }}><div style={{ fontSize: 16, marginBottom: 5 }}>{teamName('B')}</div><div style={{ fontSize: 32, fontWeight: 'bold' }}>{scoreB}</div></div>
             </div>
             <div style={{ fontSize: 12, color: '#666', marginTop: 15 }}>Тот, у кого меньше баллов, играет лучше! (Зеленый)</div>
           </div>
-          {isFinished ? <button onClick={() => { playSound('click'); onExit(gameState); }} style={{ padding: '15px 40px', background: titleColor, border: 'none', borderRadius: 8, fontSize: 20, fontWeight: 'bold', cursor: 'pointer', color: titleColor === '#ffd700' ? '#000' : '#fff' }}>Выйти в лобби</button> : <button onClick={() => { playSound('click'); socket.emit('next_round', roomId); }} style={{ padding: '15px 40px', background: '#f0c674', border: 'none', borderRadius: 8, fontSize: 20, fontWeight: 'bold', cursor: 'pointer' }}>Следующий кон</button>}
+          {isFinished ? <button onClick={() => { playSound('click'); onExit(gameState); }} style={{ padding: '15px 40px', background: titleColor, border: 'none', borderRadius: 8, fontSize: 20, fontWeight: 'bold', cursor: 'pointer', color: titleColor === '#ffd700' ? '#000' : '#fff' }}>Выйти в лобби</button> : <button onClick={() => { playSound('click'); if(socket.connected) socket.emit('next_round', roomId, gameState.stateVersion); }} style={{ padding: '15px 40px', background: '#f0c674', border: 'none', borderRadius: 8, fontSize: 20, fontWeight: 'bold', cursor: 'pointer' }}>Следующий кон</button>}
         </div>
       </div>
     );
@@ -533,13 +540,17 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole, onEx
     else { setSelectedCards([...selectedCards, card]); }
   };
 
-  const playCards = () => { if (selectedCards.length === 0) return; playSound('click'); socket.emit('play_card', roomId, selectedCards); };
-  const beat = () => { if (selectedCards.length === 0) return; playSound('click'); socket.emit('pass_or_beat', roomId, 'beat', selectedCards); };
-  const bita = () => { playSound('click'); socket.emit('pass_or_beat', roomId, 'pass', selectedCards); };
+  const playCards = () => { if (selectedCards.length === 0) return; playSound('click'); if(socket.connected) socket.emit('play_card', roomId, selectedCards, gameState.stateVersion); };
+  const beat = () => { if (selectedCards.length === 0) return; playSound('click'); if(socket.connected) socket.emit('pass_or_beat', roomId, 'beat', selectedCards, gameState.stateVersion); };
+  const bita = () => { playSound('click'); if(socket.connected) socket.emit('pass_or_beat', roomId, 'pass', selectedCards, gameState.stateVersion); };
 
   const isMyTurn = gameState.currentPlayer === gameState.me;
-  const isDev = username === DEV_NAME;
-  const required = gameState.trick?.required || gameState.trick?.cardsOnTable?.length || 1;
+  const isDev = isAdmin;
+  const required = gameState.trick?.required || 1;
+  const selectedIds = selectedCards.map(c=>`${c.rank}_${c.suit}`);
+  const legalSelection = gameState.legalMoves?.some((move:string[]) => move.length===selectedIds.length && move.every(id=>selectedIds.includes(id)));
+  const passCount = Math.min(required,gameState.hand.length);
+  const legalPass = selectedCards.length===passCount || (gameState.trick?.attacker===gameState.me && selectedCards.length===0);
 
   return (
     <LayoutGroup>
@@ -587,7 +598,7 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole, onEx
               <div style={{ flex: 1, padding: 10, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {messages.map((m, i) => (
                   <div key={i} style={{ fontSize: 14 }}>
-                    <span style={{ color: m.sender === 'СИСТЕМА' ? '#ff9800' : m.sender === 'DEBUG' ? '#4caf50' : (m.sender === DEV_NAME ? undefined : (m.sender === username ? '#4caf50' : '#f0c674')), fontWeight: 'bold' }} className={m.sender === DEV_NAME ? 'dev-nick' : ''}>{m.sender === DEV_NAME && '👑 '}{m.sender}: </span>
+                    <span style={{ color: m.sender === 'СИСТЕМА' ? '#ff9800' : m.sender === 'DEBUG' ? '#4caf50' : (m.isAdmin ? undefined : (m.sender === username ? '#4caf50' : '#f0c674')), fontWeight: 'bold' }} className={m.isAdmin ? 'dev-nick' : ''}>{m.isAdmin && '👑 '}{m.sender}: </span>
                     <span style={{ color: m.sender === 'DEBUG' ? '#4caf50' : '#fff', fontSize: m.sender === 'DEBUG' ? 12 : 14 }}>{m.text}</span><span style={{ color: '#666', fontSize: 10, marginLeft: 5 }}>{m.time}</span>
                   </div>
                 ))}
@@ -615,18 +626,18 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole, onEx
 
         <div style={{ background: '#252540', padding: '15px 30px', display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', borderBottom: '2px solid #444' }}>
           <div style={{ justifySelf: 'start', display: 'flex', alignItems: 'center', gap: 15 }}>
-            <div style={{ color: '#f0c674', fontSize: '18px', fontWeight: 'bold' }}>ID: {roomId}</div>
+            <div title={roomId} onClick={()=>navigator.clipboard?.writeText(roomId).catch(()=>{})} style={{ color: '#f0c674', fontSize: '14px', fontWeight: 'bold', cursor:'pointer' }}>ID: {roomId.slice(0,8)}…</div>
             {isDev && openDevConsole && <button onClick={openDevConsole} title="Dev Console (` тильда)" style={{ background: 'transparent', border: '1px solid #ffd700', color: '#ffd700', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', gap: 4 }}>🛠️ Dev</button>}
           </div>
           <div style={{ justifySelf: 'center', display: 'flex', alignItems: 'center', gap: '15px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div className={gameState.players[0]?.name === DEV_NAME ? 'dev-avatar-frame' : ''}><img src={getAvatar(gameState.players[0]?.name)} style={{ width: 30, height: 30, borderRadius: '50%', background: '#fff', border: gameState.players[0]?.name === DEV_NAME ? 'none' : 'none' }} /></div>
-              <span className={gameState.players[0]?.name === DEV_NAME ? 'dev-nick' : ''} style={{ color: gameState.players[0]?.name === DEV_NAME ? undefined : 'white', fontWeight: 'bold' }}>{gameState.players[0]?.name === DEV_NAME && '👑 '}{gameState.players[0]?.name}</span>
+              <div className={gameState.players[0]?.isAdmin ? 'dev-avatar-frame' : ''}><img src={getAvatar(gameState.players[0]?.name)} style={{ width: 30, height: 30, borderRadius: '50%', background: '#fff', border: gameState.players[0]?.isAdmin ? 'none' : 'none' }} /></div>
+              <span className={gameState.players[0]?.isAdmin ? 'dev-nick' : ''} style={{ color: gameState.players[0]?.isAdmin ? undefined : 'white', fontWeight: 'bold' }}>{gameState.players[0]?.isAdmin && '👑 '}{gameState.players[0]?.name}</span>
             </div>
             <span style={{ color: '#f0c674', fontWeight: 'bold' }}>VS</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className={gameState.players[1]?.name === DEV_NAME ? 'dev-nick' : ''} style={{ color: gameState.players[1]?.name === DEV_NAME ? undefined : 'white', fontWeight: 'bold' }}>{gameState.players[1]?.name === DEV_NAME && '👑 '}{gameState.players[1]?.name}</span>
-              <div className={gameState.players[1]?.name === DEV_NAME ? 'dev-avatar-frame' : ''}><img src={getAvatar(gameState.players[1]?.name)} style={{ width: 30, height: 30, borderRadius: '50%', background: '#fff' }} /></div>
+              <span className={gameState.players[1]?.isAdmin ? 'dev-nick' : ''} style={{ color: gameState.players[1]?.isAdmin ? undefined : 'white', fontWeight: 'bold' }}>{gameState.players[1]?.isAdmin && '👑 '}{gameState.players[1]?.name}</span>
+              <div className={gameState.players[1]?.isAdmin ? 'dev-avatar-frame' : ''}><img src={getAvatar(gameState.players[1]?.name)} style={{ width: 30, height: 30, borderRadius: '50%', background: '#fff' }} /></div>
             </div>
           </div>
           <div style={{ justifySelf: 'end', display: 'flex', gap: 20 }}>
@@ -635,16 +646,17 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole, onEx
           </div>
         </div>
 
+        {<div style={{display:'flex',flexWrap:'wrap',justifyContent:'center',gap:10,padding:8,background:'#252540',color:'white'}}>{gameState.players.map((p:any)=><span key={p.id} style={{color:p.id===gameState.currentPlayer?'#f0c674':'#ccc',border:'1px solid #555',borderRadius:8,padding:5}}>{p.side} · {p.name} · {p.handCount} карт{!p.connected?' · не в сети':''}{p.id===gameState.me?' · вы':''}</span>)}</div>}
         <div className="felt-table" style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', padding: '20px 40px', alignItems: 'flex-start' }}>
             <div style={{ justifySelf: 'start', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '10px', color: gameState.players[0]?.name === DEV_NAME ? undefined : '#ccc' }} className={gameState.players[0]?.name === DEV_NAME ? 'dev-nick' : ''}>
-                <img src={getAvatar(gameState.players[0]?.name)} style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff' }} />{gameState.players[0]?.name === DEV_NAME && '👑 '}{gameState.players[0]?.name}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '10px', color: gameState.players[0]?.isAdmin ? undefined : '#ccc' }} className={gameState.players[0]?.isAdmin ? 'dev-nick' : ''}>
+                <img src={getAvatar(gameState.players[0]?.name)} style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff' }} />{gameState.players[0]?.isAdmin && '👑 '}{gameState.players[0]?.name}
               </div>
               <div style={{ position: 'relative', width: '60px', height: '90px' }}>
                 {Array.from({ length: gameState.bitaCount?.A || 0 }).map((_, i) => (
                   <div key={i} style={{ position: 'absolute', top: Math.min(i * 1.5, 20), left: Math.min(i * 1.5, 20) }}>
-                    <CardView card={{ suit: '♠', rank: '6' }} small faceDown={true} isDevCard={gameState.players[0]?.name === DEV_NAME} />
+                    <CardView card={{ suit: '♠', rank: '6' }} small faceDown={true} isDevCard={gameState.players[0]?.isAdmin} />
                   </div>
                 ))}
                 {(!gameState.bitaCount?.A || gameState.bitaCount.A === 0) && <div style={{ width: '50px', height: '75px', border: '2px dashed #666', borderRadius: '8px', position: 'absolute' }} />}
@@ -667,13 +679,13 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole, onEx
               <div style={{ color: 'white', marginTop: '15px', background: 'rgba(0,0,0,0.6)', padding: '2px 10px', borderRadius: '10px' }}>В колоде: {gameState.deckCount}</div>
             </div>
             <div style={{ justifySelf: 'end', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '10px', color: gameState.players[1]?.name === DEV_NAME ? undefined : '#ccc' }} className={gameState.players[1]?.name === DEV_NAME ? 'dev-nick' : ''}>
-                <img src={getAvatar(gameState.players[1]?.name)} style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff' }} />{gameState.players[1]?.name === DEV_NAME && '👑 '}{gameState.players[1]?.name}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '10px', color: gameState.players[1]?.isAdmin ? undefined : '#ccc' }} className={gameState.players[1]?.isAdmin ? 'dev-nick' : ''}>
+                <img src={getAvatar(gameState.players[1]?.name)} style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff' }} />{gameState.players[1]?.isAdmin && '👑 '}{gameState.players[1]?.name}
               </div>
               <div style={{ position: 'relative', width: '60px', height: '90px' }}>
                 {Array.from({ length: gameState.bitaCount?.B || 0 }).map((_, i) => (
                   <div key={i} style={{ position: 'absolute', top: Math.min(i * 1.5, 20), left: Math.min(i * 1.5, 20) }}>
-                    <CardView card={{ suit: '♠', rank: '6' }} small faceDown={true} isDevCard={gameState.players[1]?.name === DEV_NAME} />
+                    <CardView card={{ suit: '♠', rank: '6' }} small faceDown={true} isDevCard={gameState.players[1]?.isAdmin} />
                   </div>
                 ))}
                 {(!gameState.bitaCount?.B || gameState.bitaCount.B === 0) && <div style={{ width: '50px', height: '75px', border: '2px dashed #666', borderRadius: '8px', position: 'absolute' }} />}
@@ -685,8 +697,8 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole, onEx
             {gameState.trick ? (
               <>
                 <div style={{ color: '#ccc', fontSize: '18px', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(0,0,0,0.4)', padding: '5px 15px', borderRadius: '20px' }}>
-                  Ходил: <span className={gameState.players[gameState.trick.attacker]?.name === DEV_NAME ? 'dev-nick' : ''} style={{ color: gameState.players[gameState.trick.attacker]?.name === DEV_NAME ? undefined : '#f0c674', fontWeight: 'bold' }}>{gameState.players[gameState.trick.attacker]?.name === DEV_NAME && '👑 '}{gameState.players[gameState.trick.attacker]?.name}</span>
-                  <div className={gameState.players[gameState.trick.attacker]?.name === DEV_NAME ? 'dev-avatar-frame' : ''}><img src={getAvatar(gameState.players[gameState.trick.attacker]?.name)} style={{ width: 25, height: 25, borderRadius: '50%', background: '#fff' }} /></div>
+                  Ходил: <span className={gameState.players[gameState.trick.attacker]?.isAdmin ? 'dev-nick' : ''} style={{ color: gameState.players[gameState.trick.attacker]?.isAdmin ? undefined : '#f0c674', fontWeight: 'bold' }}>{gameState.players[gameState.trick.attacker]?.isAdmin && '👑 '}{gameState.players[gameState.trick.attacker]?.name}</span>
+                  <div className={gameState.players[gameState.trick.attacker]?.isAdmin ? 'dev-avatar-frame' : ''}><img src={getAvatar(gameState.players[gameState.trick.attacker]?.name)} style={{ width: 25, height: 25, borderRadius: '50%', background: '#fff' }} /></div>
                 </div>
                 <div style={{ display: 'flex', paddingLeft: '20px' }}>
                   {gameState.trick.cardsOnTable.map((card: any, i: number) => (
@@ -705,7 +717,7 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole, onEx
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '15px', minHeight: '120px' }}>
             {gameState.hand.map((card: any, index: number) => {
               const isSelected = selectedCards.some(c => c.suit === card.suit && c.rank === card.rank);
-              const cardStr = `${card.rank}_${SUIT_MAP[card.suit]}`;
+              const cardStr = `${card.rank}_${card.suit}`;
               const isLegal = gameState.legalMoves?.some((move: string[]) => move.includes(cardStr));
               return (
                 <motion.div 
@@ -721,21 +733,21 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole, onEx
             })}
           </div>
           <div style={{ display: 'flex', gap: '15px', height: '44px', alignItems: 'center', justifyContent: 'center' }}>
-            {isMyTurn && !gameState.trick && selectedCards.length > 0 && (
+            {isMyTurn && !gameState.trick && legalSelection && (
               <button onClick={playCards} style={{ padding: '10px 30px', background: '#f0c674', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', color: '#000', boxShadow: '0 4px 0 #b08d40' }}>Сделать ход</button>
             )}
             
-            {isMyTurn && gameState.trick && selectedCards.length === required && (
+            {isMyTurn && gameState.trick && legalSelection && (
               <button onClick={beat} style={{ padding: '10px 30px', background: '#4caf50', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', color: '#fff', boxShadow: '0 4px 0 #2e7d32' }}>Перебить</button>
             )}
 
-            {isMyTurn && gameState.trick && (gameState.trick.attacker === gameState.me || selectedCards.length === required) && (
+            {isMyTurn && gameState.trick && legalPass && (
               <button onClick={bita} style={{ padding: '10px 30px', background: '#f44336', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', color: '#fff', boxShadow: '0 4px 0 #c62828' }}>Бита (Ваше)</button>
             )}
             
             {!isMyTurn && <div style={{ color: '#555', alignSelf: 'center' }}>Ожидание соперника...</div>}
-            {isMyTurn && gameState.trick && selectedCards.length !== required && gameState.trick.attacker !== gameState.me && (
-              <div style={{ color: '#aaa', alignSelf: 'center', fontSize: 14 }}>Выделите ровно {required} карт(ы) для отбоя или сброса</div>
+            {isMyTurn && gameState.trick && !legalPass && gameState.trick.attacker !== gameState.me && (
+              <div style={{ color: '#aaa', alignSelf: 'center', fontSize: 14 }}>Выделите ровно {passCount} карт(ы) для отбоя или сброса</div>
             )}
             
             <button onClick={() => { playSound('click'); onExit(gameState); }} style={{ marginLeft: '20px', padding: '10px 20px', background: 'transparent', color: '#aaa', border: '1px solid #555', borderRadius: '8px', cursor: 'pointer' }}>Выйти</button>
@@ -747,5 +759,5 @@ export function Game({ socket, roomId, setRoomId, username, openDevConsole, onEx
 }
 
 function devNameDisplay(name: string) {
-  return name === 'Vladislav' ? '👑 Vladislav' : name;
+  return '👑 ' + name;
 }

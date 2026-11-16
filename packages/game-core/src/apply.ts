@@ -2,6 +2,7 @@ import { GameState, PlayerId, TrickState, Side } from './state';
 import { createDeck, shuffle, mulberry32 } from './deck';
 import { Card, cardEquals } from './card';
 import { canBeat } from './trick';
+import { validateSpecial } from './special';
 import { calculatePoints } from './scoring';
 
 export type GameEvent =
@@ -38,7 +39,7 @@ export function applyEvent(state: GameState, event: GameEvent): ApplyResult {
   });
 
   if (event.type === 'START_ROUND') {
-    const rng = mulberry32(event.seed || Math.floor(Math.random() * 1000000));
+    const rng = mulberry32(event.seed ?? Math.floor(Math.random() * 1000000));
     const deck = shuffle(createDeck(), rng);
     const numPlayers = state.mode === '1v1' ? 2 : 4;
     
@@ -62,9 +63,13 @@ export function applyEvent(state: GameState, event: GameEvent): ApplyResult {
   if (event.type === 'ATTACK') {
     if (state.phase !== 'playing') return { ok: false, error: 'WRONG_PHASE' };
     if (state.currentPlayer !== event.player) return { ok: false, error: 'NOT_YOUR_TURN' };
-    if (state.trick) return { ok: false, error: 'TRICK_EXISTS' }; 
+    if (state.trick) return { ok: false, error: 'TRICK_EXISTS' };
+    if (!Array.isArray(event.cards) || !event.cards.length || event.cards.some(c => !c) || !validateSpecial(event.cards, state.trump!)) return { ok: false, error: 'ILLEGAL_SET' };
+    const opponent = state.players[(event.player + 1) % (state.mode === '1v1' ? 2 : 4)];
+    if (opponent.hand.length > 0 && event.cards.length > opponent.hand.length) return { ok: false, error: 'WRONG_COUNT' }; 
 
     const player = state.players[event.player];
+    if (!player || !Array.isArray(event.cards) || event.cards.some(c => !c || typeof c !== 'object')) return { ok: false, error: 'ILLEGAL_SET' };
     const newHand = takeFromHand(player.hand, event.cards);
     if (!newHand) return { ok: false, error: 'CARD_NOT_IN_HAND' };
 
@@ -83,9 +88,11 @@ export function applyEvent(state: GameState, event: GameEvent): ApplyResult {
     if (state.phase !== 'playing') return { ok: false, error: 'WRONG_PHASE' };
     if (state.currentPlayer !== event.player) return { ok: false, error: 'NOT_YOUR_TURN' };
     if (!state.trick) return { ok: false, error: 'NO_TRICK' };
+    if (!Array.isArray(event.cards) || !event.cards.length || event.cards.some(c => !c)) return { ok: false, error: 'ILLEGAL_SET' };
     if (!canBeat(event.cards, state.trick.topCards, state.trump!)) return { ok: false, error: 'CANNOT_BEAT' };
     
     const player = state.players[event.player];
+    if (!player || !Array.isArray(event.cards) || event.cards.some(c => !c || typeof c !== 'object')) return { ok: false, error: 'ILLEGAL_SET' };
     const newHand = takeFromHand(player.hand, event.cards);
     if (!newHand) return { ok: false, error: 'CARD_NOT_IN_HAND' };
 
@@ -104,11 +111,14 @@ export function applyEvent(state: GameState, event: GameEvent): ApplyResult {
     if (state.currentPlayer !== event.player) return { ok: false, error: 'NOT_YOUR_TURN' };
     if (!state.trick) return { ok: false, error: 'NO_TRICK' };
 
-    if (event.cards.length > 0 && event.cards.length !== state.trick.required) {
-      return { ok: false, error: 'WRONG_COUNT' };
-    }
+    if (!Array.isArray(event.cards)) return { ok: false, error: 'ILLEGAL_SET' };
+    // The current UI explicitly permits the original attacker to close the trick with no cards.
+    // Others discard the required number, or all remaining cards if fewer are available.
+    const count = Math.min(state.trick.required, state.players[event.player].hand.length);
+    if (event.cards.length !== count && !(event.player === state.trick.attacker && event.cards.length === 0)) return { ok: false, error: 'WRONG_COUNT' };
 
     const player = state.players[event.player];
+    if (!player || !Array.isArray(event.cards) || event.cards.some(c => !c || typeof c !== 'object')) return { ok: false, error: 'ILLEGAL_SET' };
     const newHand = takeFromHand(player.hand, event.cards);
     if (!newHand) return { ok: false, error: 'CARD_NOT_IN_HAND' };
       
@@ -139,7 +149,7 @@ export function applyEvent(state: GameState, event: GameEvent): ApplyResult {
           if (s.deck.length > 0) {
             const newTrump = s.deck[0]; s.trump = newTrump.suit; s.trumpCard = newTrump;
             s.trumpChangeEvent = { player: current, card: newTrump };
-          }
+          } else { s.trumpCard = null; }
         } else {
           s.players[current].hand.push(card);
           if (s.trumpChanged && s.trumpCard && cardEquals(card, s.trumpCard)) {
@@ -148,6 +158,12 @@ export function applyEvent(state: GameState, event: GameEvent): ApplyResult {
         }
       }
       current = (current + 1) % numPlayers;
+    }
+    if (!s.players[s.currentPlayer].hand.length) {
+      for (let i = 1; i < numPlayers; i++) {
+        const candidate = (s.currentPlayer + i) % numPlayers as PlayerId;
+        if (s.players[candidate].hand.length) { s.currentPlayer = candidate; break; }
+      }
     }
     return { ok: true, state: { ...s, stateVersion: (state.stateVersion || 0) + 1, turnDeadline: Date.now() + 30000 } };
   }

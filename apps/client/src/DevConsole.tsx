@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Socket } from 'socket.io-client';
 
-const DEV_NAME = 'Vladislav';
 
 const COMMANDS = [
   { cmd: '/gold', desc: '💰 Золотой дождь (только тебе)' },

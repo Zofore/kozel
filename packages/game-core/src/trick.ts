@@ -3,7 +3,7 @@ import { Card, Suit, RANK_VALUE } from './card';
 // newCards - это твои карты (которыми ты бьешь).
 // tableCards - это карты, которые лежат на столе.
 export function canBeat(newCards: Card[], tableCards: Card[], trump: Suit): boolean {
-  if (newCards.length !== tableCards.length) return false;
+  if (!newCards.length || newCards.length !== tableCards.length || newCards.some(c => !c)) return false;
   
   // Сортируем обе группы по убыванию, чтобы сравнивать самые сильные карты
   const sortedNew = [...newCards].sort((a, b) => RANK_VALUE[b.rank] - RANK_VALUE[a.rank]);

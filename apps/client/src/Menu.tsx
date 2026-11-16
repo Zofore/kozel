@@ -3,7 +3,6 @@ import { Socket } from 'socket.io-client';
 import { AdminPanel } from './AdminPanel';
 import { Goat3D } from './Goat3D';
 
-const DEV_NAME = 'Vladislav';
 
 const devStyles = `
 @keyframes goldenRotate {
@@ -45,7 +44,7 @@ export function Menu({ socket, user, onPlay, onProfile, onFriends, onLogout }: {
   const [adminOpen, setAdminOpen] = useState(false);
   const defaultAvatar = `https://api.dicebear.com/7.x/adventurer/svg?seed=${user.username}`;
   const avatar = user.avatar || defaultAvatar;
-  const isDev = user.username === DEV_NAME;
+  const isDev = user.isAdmin === true;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'transparent', color: 'white', position: 'relative' }}>

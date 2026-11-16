@@ -1,3 +1,9 @@
-node_modules
+node_modules/
 .env
+.env.*
+!.env.example
 *.exe
+**/dist/
+server-dist/
+**/users.json
+*.log

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Goat3D } from './Goat3D';
 
-const API_URL = 'https://kozel-server-zofore-4jhk.onreza.app';
+import { API_URL } from './api';
 
 export function Auth({ onAuth }: { onAuth: (token: string, user: any) => void }) {
   const [isLogin, setIsLogin] = useState(true);
@@ -62,7 +62,7 @@ export function Auth({ onAuth }: { onAuth: (token: string, user: any) => void })
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
           <input type="text" placeholder="Никнейм" value={username} onChange={e => setUsername(e.target.value)} required style={{ padding: '12px', borderRadius: 8, border: '1px solid #555', background: 'rgba(26, 26, 46, 0.8)', color: 'white', outline: 'none' }} />
-          <input type="password" placeholder="Пароль" value={password} onChange={e => setPassword(e.target.value)} required style={{ padding: '12px', borderRadius: 8, border: '1px solid #555', background: 'rgba(26, 26, 46, 0.8)', color: 'white', outline: 'none' }} />
+          <input type="password" minLength={isLogin ? undefined : 8} placeholder="Пароль" value={password} onChange={e => setPassword(e.target.value)} required style={{ padding: '12px', borderRadius: 8, border: '1px solid #555', background: 'rgba(26, 26, 46, 0.8)', color: 'white', outline: 'none' }} />
           {!isLogin && (
             <>
               <input type="text" placeholder="ФИО" value={fullname} onChange={e => setFullname(e.target.value)} required style={{ padding: '12px', borderRadius: 8, border: '1px solid #555', background: 'rgba(26, 26, 46, 0.8)', color: 'white', outline: 'none' }} />

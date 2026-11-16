@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-const API_URL = 'https://kozel-server-zofore-4jhk.onreza.app';
+
 
 export function ProfileSettings({ user, onSave, onBack }: { user: any, onSave: (status: string, avatar: string) => void, onBack: () => void }) {
   const [status, setStatus] = useState(user.status || 'В сети');

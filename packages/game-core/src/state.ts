@@ -9,6 +9,7 @@ export interface PlayerState {
   hand: Card[];
   name: string;
   connected?: boolean;
+  isAdmin?: boolean;
 }
 
 export interface TrickState {
@@ -53,6 +54,7 @@ export interface PublicPlayer {
   name: string;
   handCount: number;
   connected: boolean;
+  isAdmin?: boolean;
 }
 
 export interface PlayerView {
