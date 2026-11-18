@@ -218,9 +218,31 @@ export function MenuBackground() {
           .croupier-left { position: absolute; left: 0px; bottom: 0px; width: 350px; height: 550px; z-index: 2; }
           .croupier-right { position: absolute; right: 0px; bottom: 0px; width: 350px; height: 550px; z-index: 2; }
 
+          @media (max-width: 820px), (pointer: coarse) and (max-height: 600px) {
+            .croupier-left { width: 200px; height: 320px; }
+            .croupier-right { width: 200px; height: 320px; }
+          }
+          @media (max-width: 480px) {
+            .croupier-left { width: 150px; height: 240px; }
+            .croupier-right { width: 150px; height: 240px; }
+          }
+          @media (pointer: coarse) and (orientation: landscape) and (max-height: 600px) {
+            .croupier-left { width: 120px; height: 190px; }
+            .croupier-right { width: 120px; height: 190px; }
+          }
+
           .chandelier-pos-1 { position: absolute; top: -50px; left: 50%; transform: translateX(-50%); opacity: 0.5; z-index: 1; }
           .chandelier-pos-2 { position: absolute; top: -20px; left: 10%; opacity: 0.7; z-index: 1; }
           .chandelier-pos-3 { position: absolute; top: -20px; right: 10%; opacity: 0.7; z-index: 1; }
+
+          @media (max-width: 820px), (pointer: coarse) and (max-height: 600px) {
+            .chandelier-pos-1 { opacity: 0.2; }
+            .chandelier-pos-2 { opacity: 0.3; }
+            .chandelier-pos-3 { opacity: 0.3; }
+          }
+          @media (pointer: coarse) and (orientation: landscape) and (max-height: 600px) {
+            .chandelier-pos-1, .chandelier-pos-2, .chandelier-pos-3 { display: none; }
+          }
 
           /* АНИМАЦИЯ МЕРЦАНИЯ СВЕТА */
           @keyframes lightFlicker {
@@ -255,11 +277,34 @@ export function MenuBackground() {
             position: absolute;
             width: 85px;
             height: 125px;
-            bottom: 250px; 
+            bottom: 250px;
             opacity: 0;
-            z-index: 10; 
+            z-index: 10;
             will-change: transform, opacity;
             transform: translateZ(0);
+          }
+
+          @media (max-width: 820px), (pointer: coarse) and (max-height: 600px) {
+            .flying-card {
+              width: 50px;
+              height: 75px;
+              bottom: 180px;
+            }
+          }
+          @media (max-width: 480px) {
+            .flying-card {
+              width: 38px;
+              height: 56px;
+              bottom: 140px;
+            }
+          }
+          @media (pointer: coarse) and (orientation: landscape) and (max-height: 600px) {
+            .flying-card {
+              width: 35px;
+              height: 52px;
+              bottom: 120px;
+              opacity: 0.3;
+            }
           }
 
           .premium-card {
@@ -319,13 +364,45 @@ export function MenuBackground() {
             90% { opacity: 1; }
             100% { left: calc(100vw - 130px); transform: translate(-100%, 0) rotate(30deg) scale(0.8); opacity: 0; }
           }
-
           @keyframes throwLeft {
             0% { right: 130px; transform: translate(0, 0) rotate(15deg) scale(0.8); opacity: 0; }
             10% { opacity: 1; }
             50% { right: 50vw; transform: translate(50%, -150px) rotate(-15deg) scale(1.1); opacity: 1; }
             90% { opacity: 1; }
             100% { right: calc(100vw - 130px); transform: translate(100%, 0) rotate(-30deg) scale(0.8); opacity: 0; }
+          }
+
+          @media (max-width: 820px), (pointer: coarse) and (max-height: 600px) {
+            @keyframes throwRight {
+              0% { left: 60px; transform: translate(0, 0) rotate(-10deg) scale(0.7); opacity: 0; }
+              10% { opacity: 0.8; }
+              50% { left: 50vw; transform: translate(-50%, -80px) rotate(10deg) scale(0.9); opacity: 0.8; }
+              90% { opacity: 0.8; }
+              100% { left: calc(100vw - 60px); transform: translate(-100%, 0) rotate(20deg) scale(0.7); opacity: 0; }
+            }
+            @keyframes throwLeft {
+              0% { right: 60px; transform: translate(0, 0) rotate(10deg) scale(0.7); opacity: 0; }
+              10% { opacity: 0.8; }
+              50% { right: 50vw; transform: translate(50%, -80px) rotate(-10deg) scale(0.9); opacity: 0.8; }
+              90% { opacity: 0.8; }
+              100% { right: calc(100vw - 60px); transform: translate(100%, 0) rotate(-20deg) scale(0.7); opacity: 0; }
+            }
+          }
+          @media (max-width: 480px) {
+            @keyframes throwRight {
+              0% { left: 40px; transform: translate(0, 0) rotate(-8deg) scale(0.6); opacity: 0; }
+              10% { opacity: 0.6; }
+              50% { left: 50vw; transform: translate(-50%, -50px) rotate(8deg) scale(0.8); opacity: 0.6; }
+              90% { opacity: 0.6; }
+              100% { left: calc(100vw - 40px); transform: translate(-100%, 0) rotate(15deg) scale(0.6); opacity: 0; }
+            }
+            @keyframes throwLeft {
+              0% { right: 40px; transform: translate(0, 0) rotate(8deg) scale(0.6); opacity: 0; }
+              10% { opacity: 0.6; }
+              50% { right: 50vw; transform: translate(50%, -50px) rotate(-8deg) scale(0.8); opacity: 0.6; }
+              90% { opacity: 0.6; }
+              100% { right: calc(100vw - 40px); transform: translate(100%, 0) rotate(-15deg) scale(0.6); opacity: 0; }
+            }
           }
 
           .fly-right { animation: throwRight linear infinite; }
