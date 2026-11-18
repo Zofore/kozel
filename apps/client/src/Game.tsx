@@ -365,10 +365,17 @@ export function Game({ socket, roomId, setRoomId, username, isAdmin = false, ope
   const [goldEmojis, setGoldEmojis] = useState<any[]>([]);
   const [matchConfetti, setMatchConfetti] = useState<any[]>([]);
   const [isReversed, setIsReversed] = useState(false);
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth <= 820);
 
   const prevState = useRef<any>(null);
   const lastProcessedMsgId = useRef<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 820);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     if (!gameState || !gameState.turnDeadline) { setTimeLeft(0); return; }
@@ -396,7 +403,8 @@ export function Game({ socket, roomId, setRoomId, username, isAdmin = false, ope
           if (amIWinner) {
             playSound('win');
             const emojis = ['🎉', '🎊', '🏆', '🥇', '💰', '👑', '🌟'];
-            setMatchConfetti(Array.from({ length: 100 }).map((_, i) => ({
+            const count = isMobile ? 40 : 100;
+            setMatchConfetti(Array.from({ length: count }).map((_, i) => ({
               id: Date.now() + i,
               emoji: emojis[Math.floor(Math.random() * emojis.length)],
               left: Math.random() * 100,
@@ -425,14 +433,16 @@ export function Game({ socket, roomId, setRoomId, username, isAdmin = false, ope
     const onKicked = (msg: string) => { setErrorMsg(msg); if(kickedTimer) clearTimeout(kickedTimer); kickedTimer=setTimeout(() => setRoomId((current:string|null)=>current===roomId?null:current), 1500); };
     const onAdminRain = () => {
       playSound('rain'); const emojis = ['🎉', '🎊', '💰', '🍀', '👑', '🔥', '⭐', '💎', '🎁', '💵'];
-      const newRain = Array.from({ length: 60 }).map((_, i) => ({ id: Date.now() + i, emoji: emojis[Math.floor(Math.random() * emojis.length)], left: Math.random() * 100, duration: 2 + Math.random() * 3 }));
+      const count = isMobile ? 25 : 60;
+      const newRain = Array.from({ length: count }).map((_, i) => ({ id: Date.now() + i, emoji: emojis[Math.floor(Math.random() * emojis.length)], left: Math.random() * 100, duration: 2 + Math.random() * 3 }));
       setRainEmojis(prev => [...prev, ...newRain]); setTimeout(() => { setRainEmojis(prev => prev.filter(e => !newRain.find(r => r.id === e.id))); }, 6000);
     };
     const onDevJoined = ({ name }: { name: string }) => { playSound('dev_join'); setDevJoinAlert(name); setTimeout(() => setDevJoinAlert(null), 4000); };
     const onAdminSecretFx = () => { playSound('secret'); setSecretFx(true); setTimeout(() => setSecretFx(false), 3500); };
     const onAdminGold = () => {
       playSound('gold'); const coins = ['💰', '🪙', '⭐', '💎', '✨', '👑', '🌟'];
-      const newCoins = Array.from({ length: 80 }).map((_, i) => ({ id: Date.now() + i + Math.random(), emoji: coins[Math.floor(Math.random() * coins.length)], left: Math.random() * 100, duration: 2 + Math.random() * 2.5, size: 25 + Math.random() * 30 }));
+      const count = isMobile ? 30 : 80;
+      const newCoins = Array.from({ length: count }).map((_, i) => ({ id: Date.now() + i + Math.random(), emoji: coins[Math.floor(Math.random() * coins.length)], left: Math.random() * 100, duration: 2 + Math.random() * 2.5, size: 25 + Math.random() * 30 }));
       setGoldEmojis(prev => [...prev, ...newCoins]); setTimeout(() => { setGoldEmojis(prev => prev.filter(e => !newCoins.find(c => c.id === e.id))); }, 5500);
     };
     const onAdminReverse = () => { playSound('reverse'); setIsReversed(true); setTimeout(() => setIsReversed(false), 2000); };
@@ -561,33 +571,34 @@ export function Game({ socket, roomId, setRoomId, username, isAdmin = false, ope
         transition: 'transform 0.6s ease-in-out',
       }}>
         <style>{floatingEmojiStyle}</style>
-        {floatingEmojis.map(e => <div key={e.id} className="floating-emoji" style={{ left: `${e.left}%` }}>{e.emoji}</div>)}
-        {rainEmojis.map(e => <div key={e.id} className="rain-emoji" style={{ left: `${e.left}%`, animationDuration: `${e.duration}s` }}>{e.emoji}</div>)}
-        {goldEmojis.map(g => <div key={g.id} className="gold-emoji" style={{ left: `${g.left}%`, animationDuration: `${g.duration}s`, fontSize: g.size }}>{g.emoji}</div>)}
+        {floatingEmojis.map(e => <div key={e.id} className="floating-emoji" style={{ left: `${e.left}%`, fontSize: isMobile ? 40 : 60 }}>{e.emoji}</div>)}
+        {rainEmojis.map(e => <div key={e.id} className="rain-emoji" style={{ left: `${e.left}%`, animationDuration: `${e.duration}s`, fontSize: isMobile ? 30 : 50 }}>{e.emoji}</div>)}
+        {goldEmojis.map(g => <div key={g.id} className="gold-emoji" style={{ left: `${g.left}%`, animationDuration: `${g.duration}s`, fontSize: isMobile ? Math.max(16, g.size * 0.6) : g.size }}>{g.emoji}</div>)}
 
         {secretFx && <div className="secret-overlay"><div className="secret-crown">👑</div><div className="secret-text">Создатель наблюдает за вами...</div><div className="secret-subtext">Удачи, смертные! 🃏</div></div>}
 
         {devJoinAlert && (
-          <div className="dev-join-alert" style={{ position: 'fixed', top: '30%', left: '50%', transform: 'translateX(-50%)', background: 'linear-gradient(135deg, #1a1a2e, #2a2410)', border: '3px solid #ffd700', borderRadius: 20, padding: '30px 60px', zIndex: 9999, textAlign: 'center', color: 'white', pointerEvents: 'none' }}>
-            <div style={{ fontSize: 60, marginBottom: 10 }}>👑</div><div style={{ fontSize: 28, fontWeight: 'bold', color: '#ffd700', textShadow: '0 0 20px rgba(255,215,0,0.8)' }}>{devNameDisplay(devJoinAlert)} вошёл в игру!</div>
+          <div className="dev-join-alert" style={{ position: 'fixed', top: isMobile ? '30%' : '40%', left: '50%', transform: 'translateX(-50%)', background: 'linear-gradient(135deg, #1a1a2e, #2a2410)', border: '3px solid #ffd700', borderRadius: 20, padding: isMobile ? '20px 30px' : '30px 60px', zIndex: 9999, textAlign: 'center', color: 'white', pointerEvents: 'none', maxWidth: '90vw' }}>
+            <div style={{ fontSize: isMobile ? 40 : 60, marginBottom: 10 }}>👑</div><div style={{ fontSize: isMobile ? 20 : 28, fontWeight: 'bold', color: '#ffd700', textShadow: '0 0 20px rgba(255,215,0,0.8)' }}>{devNameDisplay(devJoinAlert)} вошёл в игру!</div>
           </div>
         )}
 
         {trumpAlert && (
           <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-            <h1 style={{ color: '#f0c674', fontSize: 48, marginBottom: 40 }}>Козырь сменился!</h1>
-            <div style={{ transform: 'scale(2)' }}><CardView card={trumpAlert} className="animate-fly-to-table" /></div>
+            <h1 style={{ color: '#f0c674', fontSize: isMobile ? 28 : 48, marginBottom: isMobile ? 20 : 40, padding: '0 20px' }}>{isMobile ? 'Козырь сменился!' : 'Козырь сменился!'}</h1>
+            <div style={{ transform: isMobile ? 'scale(1.4)' : 'scale(2)' }}><CardView card={trumpAlert} className="animate-fly-to-table" /></div>
           </div>
         )}
 
         <div className={`mobile-chat ${chatOpen ? "mobile-chat-open" : ""}`} style={{ position: 'absolute', bottom: 20, right: 20, zIndex: 100 }}>
           {chatOpen ? (
-            <div className="mobile-chat-panel" style={{ width: 300, height: 400, background: '#252540', borderRadius: 12, border: '2px solid #f0c674', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 30px rgba(0,0,0,0.8)' }}>
-              <div style={{ padding: 10, background: '#1a1a2e', borderTopLeftRadius: 10, borderTopRightRadius: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #444' }}>
+            <div className="mobile-chat-panel" style={{ width: isMobile ? '100vw' : 300, height: isMobile ? '55dvh' : 400, maxWidth: isMobile ? '100vw' : 300, background: '#252540', borderRadius: isMobile ? '20px 20px 0 0' : 12, border: '2px solid #f0c674', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 30px rgba(0,0,0,0.8)', position: isMobile ? 'fixed' : 'relative', bottom: isMobile ? 0 : 'auto', left: isMobile ? 0 : 'auto', right: isMobile ? 0 : 'auto', maxHeight: isMobile ? '65dvh' : 'none' }}>
+              <div style={{ padding: isMobile ? '12px 10px 8px' : '10px', background: '#1a1a2e', borderTopLeftRadius: isMobile ? 0 : 10, borderTopRightRadius: isMobile ? 0 : 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #444' }}>
+                {isMobile && <div style={{ width: 40, height: 4, background: '#555', borderRadius: 2, margin: '0 auto 8px' }} />}
                 <span style={{ fontWeight: 'bold', color: '#f0c674' }}>💬 Чат</span>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  {isDev && openDevConsole && <button onClick={openDevConsole} title="Dev Console" style={{ background: 'transparent', border: 'none', color: '#ffd700', cursor: 'pointer', fontSize: 16 }}>🛠️</button>}
-                  <button onClick={() => { playSound('click'); setChatOpen(false); }} style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', fontSize: 18 }}>✖</button>
+                  {isDev && openDevConsole && <button onClick={openDevConsole} title="Dev Console" style={{ background: 'transparent', border: 'none', color: '#ffd700', cursor: 'pointer', fontSize: 16, minWidth: 32, minHeight: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🛠️</button>}
+                  <button onClick={() => { playSound('click'); setChatOpen(false); }} style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', fontSize: 22, minWidth: 36, minHeight: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 4 }}>✖</button>
                 </div>
               </div>
               {isDev && (
@@ -624,27 +635,37 @@ export function Game({ socket, roomId, setRoomId, username, isAdmin = false, ope
           )}
         </div>
 
-        <div className="mobile-game-header" style={{ background: '#252540', padding: '15px 30px', display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', borderBottom: '2px solid #444' }}>
-          <div style={{ justifySelf: 'start', display: 'flex', alignItems: 'center', gap: 15 }}>
-            <div title={roomId} onClick={()=>navigator.clipboard?.writeText(roomId).catch(()=>{})} style={{ color: '#f0c674', fontSize: '14px', fontWeight: 'bold', cursor:'pointer' }}>ID: {roomId.slice(0,8)}…</div>
-            {isDev && openDevConsole && <button onClick={openDevConsole} title="Dev Console (` тильда)" style={{ background: 'transparent', border: '1px solid #ffd700', color: '#ffd700', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', gap: 4 }}>🛠️ Dev</button>}
+        <div className={`mobile-game-header ${isMobile ? 'mobile-compact-header' : ''}`} style={{ background: '#252540', padding: isMobile ? '8px 12px' : '15px 30px', display: 'grid', gridTemplateColumns: isMobile ? '1fr auto' : '1fr auto 1fr', alignItems: 'center', borderBottom: '2px solid #444', gap: isMobile ? '6px' : '15px' }}>
+          <div style={{ justifySelf: 'start', display: 'flex', alignItems: 'center', gap: isMobile ? 6 : 15, flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
+            <div title={roomId} onClick={()=>navigator.clipboard?.writeText(roomId).catch(()=>{})} style={{ color: '#f0c674', fontSize: isMobile ? 11 : '14px', fontWeight: 'bold', cursor:'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: isMobile ? 80 : 'none' }}>ID:…{roomId.slice(-4)}</div>
+            {isDev && openDevConsole && <button onClick={openDevConsole} title="Dev Console" style={{ background: 'transparent', border: '1px solid #ffd700', color: '#ffd700', borderRadius: 6, padding: isMobile ? '3px 6px' : '4px 10px', cursor: 'pointer', fontSize: isMobile ? 11 : 14, display: 'flex', alignItems: 'center', gap: 4, minWidth: isMobile ? 28 : 'auto', minHeight: isMobile ? 24 : 'auto' }}>{isMobile ? '🔧' : '🛠️ Dev'}</button>}
           </div>
-          <div style={{ justifySelf: 'center', display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div className={gameState.players[0]?.isAdmin ? 'dev-avatar-frame' : ''}><img src={getAvatar(gameState.players[0]?.name)} style={{ width: 30, height: 30, borderRadius: '50%', background: '#fff', border: gameState.players[0]?.isAdmin ? 'none' : 'none' }} /></div>
-              <span className={gameState.players[0]?.isAdmin ? 'dev-nick' : ''} style={{ color: gameState.players[0]?.isAdmin ? undefined : 'white', fontWeight: 'bold' }}>{gameState.players[0]?.isAdmin && '👑 '}{gameState.players[0]?.name}</span>
+          <div style={{ ...(isMobile ? {} : { justifySelf: 'center' }), display: 'flex', alignItems: 'center', gap: '10px', fontSize: isMobile ? 12 : 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <img src={getAvatar(gameState.players[0]?.name)} style={{ width: isMobile ? 20 : 30, height: isMobile ? 20 : 30, borderRadius: '50%', background: '#fff' }} />
+              <span style={{ maxWidth: isMobile ? 60 : undefined, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: isMobile ? 11 : undefined }}>{gameState.players[0]?.name}</span>
             </div>
-            <span style={{ color: '#f0c674', fontWeight: 'bold' }}>VS</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className={gameState.players[1]?.isAdmin ? 'dev-nick' : ''} style={{ color: gameState.players[1]?.isAdmin ? undefined : 'white', fontWeight: 'bold' }}>{gameState.players[1]?.isAdmin && '👑 '}{gameState.players[1]?.name}</span>
-              <div className={gameState.players[1]?.isAdmin ? 'dev-avatar-frame' : ''}><img src={getAvatar(gameState.players[1]?.name)} style={{ width: 30, height: 30, borderRadius: '50%', background: '#fff' }} /></div>
+            <span style={{ color: '#f0c674', fontWeight: 'bold', fontSize: isMobile ? 11 : undefined }}>VS</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ maxWidth: isMobile ? 60 : undefined, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: isMobile ? 11 : undefined }}>{gameState.players[1]?.name}</span>
+              <img src={getAvatar(gameState.players[1]?.name)} style={{ width: isMobile ? 20 : 30, height: isMobile ? 20 : 30, borderRadius: '50%', background: '#fff' }} />
             </div>
           </div>
-          <div style={{ justifySelf: 'end', display: 'flex', gap: 20 }}>
-            <div style={{ color: timeLeft <= 5 ? '#f44336' : 'white', fontSize: '18px', fontWeight: timeLeft <= 5 ? 'bold' : 'normal' }}>Кон: {gameState.roundNumber || 1} | ⏱ {timeLeft}с</div>
-            <div style={{ color: '#f0c674', fontSize: '18px', fontWeight: 'bold' }}>Козырь: {gameState.trump}</div>
-          </div>
+          {isMobile ? null : (
+            <div style={{ justifySelf: 'end', display: 'flex', gap: 20 }}>
+              <div style={{ color: timeLeft <= 5 ? '#f44336' : 'white', fontSize: '14px', fontWeight: timeLeft <= 5 ? 'bold' : 'normal' }}>{timeLeft}с</div>
+              <div style={{ color: '#f0c674', fontSize: '14px', fontWeight: 'bold' }}>Козырь: {gameState.trump}</div>
+            </div>
+          )}
         </div>
+
+        {isMobile && (
+          <div style={{ display: 'flex', justifyContent: 'space-around', padding: '4px 8px', background: '#1e1e36', fontSize: 11, color: '#aaa', gap: 10 }}>
+            <span style={{ color: timeLeft <= 5 ? '#f44336' : '#f0c674', fontWeight: 'bold' }}>⏱ {timeLeft}с</span>
+            <span>Кон: {gameState.roundNumber || 1}</span>
+            <span style={{ color: '#f0c674' }}>Козырь: {gameState.trump}</span>
+          </div>
+        )}
 
         {<div className="mobile-player-list" style={{display:'flex',flexWrap:'wrap',justifyContent:'center',gap:10,padding:8,background:'#252540',color:'white'}}>{gameState.players.map((p:any)=><span key={p.id} style={{color:p.id===gameState.currentPlayer?'#f0c674':'#ccc',border:'1px solid #555',borderRadius:8,padding:5}}>{p.side} · {p.name} · {p.handCount} карт{!p.connected?' · не в сети':''}{p.id===gameState.me?' · вы':''}</span>)}</div>}
         <div className="felt-table" style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
@@ -732,25 +753,25 @@ export function Game({ socket, roomId, setRoomId, username, isAdmin = false, ope
               );
             })}
           </div>
-          <div className="mobile-actions" style={{ display: 'flex', gap: '15px', height: '44px', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="mobile-actions" style={{ display: 'flex', gap: isMobile ? 8 : 15, height: 'auto', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', padding: isMobile ? '5px 0' : 0 }}>
             {isMyTurn && !gameState.trick && legalSelection && (
-              <button onClick={playCards} style={{ padding: '10px 30px', background: '#f0c674', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', color: '#000', boxShadow: '0 4px 0 #b08d40' }}>Сделать ход</button>
+              <button onClick={playCards} style={{ padding: isMobile ? '12px 20px' : '10px 30px', background: '#f0c674', border: 'none', borderRadius: '8px', fontSize: isMobile ? 16 : 18, fontWeight: 'bold', cursor: 'pointer', color: '#000', boxShadow: '0 4px 0 #b08d40', minWidth: isMobile ? 120 : 'auto', minHeight: 48 }}>{isMobile ? 'Ход' : 'Сделать ход'}</button>
             )}
-            
+
             {isMyTurn && gameState.trick && legalSelection && (
-              <button onClick={beat} style={{ padding: '10px 30px', background: '#4caf50', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', color: '#fff', boxShadow: '0 4px 0 #2e7d32' }}>Перебить</button>
+              <button onClick={beat} style={{ padding: isMobile ? '12px 20px' : '10px 30px', background: '#4caf50', border: 'none', borderRadius: '8px', fontSize: isMobile ? 16 : 18, fontWeight: 'bold', cursor: 'pointer', color: '#fff', boxShadow: '0 4px 0 #2e7d32', minWidth: isMobile ? 120 : 'auto', minHeight: 48 }}>{isMobile ? 'Бить' : 'Перебить'}</button>
             )}
 
             {isMyTurn && gameState.trick && legalPass && (
-              <button onClick={bita} style={{ padding: '10px 30px', background: '#f44336', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', color: '#fff', boxShadow: '0 4px 0 #c62828' }}>Бита (Ваше)</button>
+              <button onClick={bita} style={{ padding: isMobile ? '12px 20px' : '10px 30px', background: '#f44336', border: 'none', borderRadius: '8px', fontSize: isMobile ? 16 : 18, fontWeight: 'bold', cursor: 'pointer', color: '#fff', boxShadow: '0 4px 0 #c62828', minWidth: isMobile ? 120 : 'auto', minHeight: 48 }}>{isMobile ? 'Бита' : 'Бита (Ваше)'}</button>
             )}
-            
-            {!isMyTurn && <div style={{ color: '#555', alignSelf: 'center' }}>Ожидание соперника...</div>}
+
+            {!isMyTurn && <div style={{ color: '#555', alignSelf: 'center', fontSize: isMobile ? 14 : 16 }}>⏳</div>}
             {isMyTurn && gameState.trick && !legalPass && gameState.trick.attacker !== gameState.me && (
-              <div style={{ color: '#aaa', alignSelf: 'center', fontSize: 14 }}>Выделите ровно {passCount} карт(ы) для отбоя или сброса</div>
+              <div style={{ color: '#aaa', alignSelf: 'center', fontSize: isMobile ? 12 : 14, textAlign: 'center', padding: '0 10px' }}>Выделите {passCount} карт{passCount > 1 ? (passCount < 5 ? 'ы' : '') : ''}</div>
             )}
-            
-            <button onClick={() => { playSound('click'); onExit(gameState); }} style={{ marginLeft: '20px', padding: '10px 20px', background: 'transparent', color: '#aaa', border: '1px solid #555', borderRadius: '8px', cursor: 'pointer' }}>Выйти</button>
+
+            <button onClick={() => { playSound('click'); onExit(gameState); }} style={{ padding: isMobile ? '12px 16px' : '10px 20px', background: 'transparent', color: '#aaa', border: '1px solid #555', borderRadius: '8px', cursor: 'pointer', fontSize: isMobile ? 14 : 16, minWidth: 48, minHeight: 48 }}>Выйти</button>
           </div>
         </div>
       </div>
