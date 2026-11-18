@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Goat3D } from './Goat3D';
 
 import { API_URL } from './api';
@@ -11,6 +11,13 @@ export function Auth({ onAuth }: { onAuth: (token: string, user: any) => void })
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth <= 820);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 820);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,15 +51,15 @@ export function Auth({ onAuth }: { onAuth: (token: string, user: any) => void })
   };
 
   return (
-    <div className="mobile-screen" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: 'radial-gradient(circle, #1a1a2e 0%, #0f3460 100%)', color: 'white' }}>
-      <div className="mobile-panel" style={{ background: 'rgba(37, 37, 64, 0.85)', backdropFilter: 'blur(10px)', padding: 40, borderRadius: 20, boxShadow: '0 10px 30px rgba(0,0,0,0.8), 0 0 20px rgba(240,198,116,0.2)', border: '2px solid #f0c674', textAlign: 'center', width: 320 }}>
-        
+    <div className="mobile-screen" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: isMobile ? '100dvh' : '100vh', background: 'radial-gradient(circle, #1a1a2e 0%, #0f3460 100%)', color: 'white', padding: 'env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0)', boxSizing: 'border-box' }}>
+      <div className="mobile-panel" style={{ background: 'rgba(37, 37, 64, 0.85)', backdropFilter: 'blur(10px)', padding: isMobile ? 'clamp(20px, 5vw, 30px)' : 40, borderRadius: 20, boxShadow: '0 10px 30px rgba(0,0,0,0.8), 0 0 20px rgba(240,198,116,0.2)', border: '2px solid #f0c674', textAlign: 'center', width: '100%', maxWidth: isMobile ? 'calc(100vw - 32px)' : 320, boxSizing: 'border-box' }}>
+
         {/* 🔽 3D КОЗЁЛ НА ЭКРАНЕ ВХОДА 🔽 */}
         <Goat3D />
-        
-        <h1 style={{ color: '#f0c674', margin: '0 0 20px 0', fontSize: 28, textShadow: '0 0 10px rgba(240,198,116,0.5)' }}>Козёл</h1>
-        
-        <h2 style={{ color: 'white', fontSize: 18, margin: '0 0 20px 0' }}>{isLogin ? 'Вход в аккаунт' : 'Регистрация'}</h2>
+
+        <h1 style={{ color: '#f0c674', margin: isMobile ? '0 0 15px 0' : '0 0 20px 0', fontSize: isMobile ? 24 : 28, textShadow: '0 0 10px rgba(240,198,116,0.5)' }}>Козёл</h1>
+
+        <h2 style={{ color: 'white', fontSize: isMobile ? 16 : 18, margin: isMobile ? '0 0 15px 0' : '0 0 20px 0' }}>{isLogin ? 'Вход в аккаунт' : 'Регистрация'}</h2>
 
         {error && (
           <div style={{ background: error.includes('успешна') ? '#4caf50' : '#d32f2f', color: 'white', padding: '10px', borderRadius: '8px', marginBottom: '15px', fontSize: '14px' }}>
@@ -61,23 +68,19 @@ export function Auth({ onAuth }: { onAuth: (token: string, user: any) => void })
         )}
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
-          <input type="text" placeholder="Никнейм" value={username} onChange={e => setUsername(e.target.value)} required style={{ padding: '12px', borderRadius: 8, border: '1px solid #555', background: 'rgba(26, 26, 46, 0.8)', color: 'white', outline: 'none' }} />
-          <input type="password" minLength={isLogin ? undefined : 8} placeholder="Пароль" value={password} onChange={e => setPassword(e.target.value)} required style={{ padding: '12px', borderRadius: 8, border: '1px solid #555', background: 'rgba(26, 26, 46, 0.8)', color: 'white', outline: 'none' }} />
+          <input type="text" placeholder="Никнейм" value={username} onChange={e => setUsername(e.target.value)} required style={{ padding: '14px', borderRadius: 8, border: '1px solid #555', background: 'rgba(26, 26, 46, 0.8)', color: 'white', outline: 'none', fontSize: 16 }} />
+          <input type="password" minLength={isLogin ? undefined : 8} placeholder="Пароль" value={password} onChange={e => setPassword(e.target.value)} required style={{ padding: '14px', borderRadius: 8, border: '1px solid #555', background: 'rgba(26, 26, 46, 0.8)', color: 'white', outline: 'none', fontSize: 16 }} />
           {!isLogin && (
             <>
-              <input type="text" placeholder="ФИО" value={fullname} onChange={e => setFullname(e.target.value)} required style={{ padding: '12px', borderRadius: 8, border: '1px solid #555', background: 'rgba(26, 26, 46, 0.8)', color: 'white', outline: 'none' }} />
-              <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required style={{ padding: '12px', borderRadius: 8, border: '1px solid #555', background: 'rgba(26, 26, 46, 0.8)', color: 'white', outline: 'none' }} />
+              <input type="text" placeholder="ФИО" value={fullname} onChange={e => setFullname(e.target.value)} required style={{ padding: '14px', borderRadius: 8, border: '1px solid #555', background: 'rgba(26, 26, 46, 0.8)', color: 'white', outline: 'none', fontSize: 16 }} />
+              <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required style={{ padding: '14px', borderRadius: 8, border: '1px solid #555', background: 'rgba(26, 26, 46, 0.8)', color: 'white', outline: 'none', fontSize: 16 }} />
             </>
           )}
 
-          <button type="submit" disabled={loading} style={{ padding: '15px', background: '#4caf50', color: 'white', border: 'none', borderRadius: 8, fontSize: 16, fontWeight: 'bold', cursor: loading ? 'not-allowed' : 'pointer', marginTop: 10, boxShadow: '0 4px 0 #2e7d32', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
-            {loading ? (
-              <>
-                <span style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid white', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-                Пробуждаем сервер...
-              </>
-            ) : (isLogin ? 'Войти' : 'Зарегистрироваться')}
-          </button>
+          <button type="submit" disabled={loading} style={{ padding: '16px', background: '#4caf50', color: 'white', border: 'none', borderRadius: 8, fontSize: 16, fontWeight: 'bold', cursor: loading ? 'not-allowed' : 'pointer', marginTop: 10, boxShadow: '0 4px 0 #2e7d32', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', minHeight: 48 }}>{loading ? (<>
+              <span style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid white', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+              Пробуждаем сервер...
+              </>) : (isLogin ? 'Войти' : 'Зарегистрироваться')}</button>
         </form>
 
         <div style={{ marginTop: 20, fontSize: 14, color: '#aaa' }}>

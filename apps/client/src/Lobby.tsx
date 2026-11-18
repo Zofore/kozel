@@ -1,8 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Socket } from 'socket.io-client';
 
 export function Lobby({ socket, setRoomId, username, onBack }: { socket: Socket, setRoomId: (id: string) => void, username: string, onBack: () => void }) {
   const [joinId, setJoinId] = useState('');
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth <= 820);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 820);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const createRoom = (mode: '1v1' | '2v2') => {
     socket.timeout(5000).emit('create_room', mode, (err:any,res: { roomId?: string; error?: string }) => {
@@ -18,30 +25,32 @@ export function Lobby({ socket, setRoomId, username, onBack }: { socket: Socket,
   };
 
   return (
-    <div className="mobile-screen" style={{ padding: 20, height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', background: 'transparent' }}>
-      
+    <div className="mobile-screen" style={{ padding: isMobile ? 'max(16px, env(safe-area-inset-top))' : 20, height: isMobile ? '100dvh' : '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', background: 'transparent', boxSizing: 'border-box' }}>
+
       {/* Обертка, которая центрирует и кнопку, и окно */}
       <div style={{ width: '100%', maxWidth: 400, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        
-        {/* КНОПКА НАЗАД (теперь она привязана к окну лобби) */}
-        <button 
-          onClick={onBack} 
-          style={{ 
-            marginBottom: 20, // Отступ до окна лобби
-            background: 'rgba(37, 37, 64, 0.8)', 
-            border: '1px solid #f0c674', 
-            color: '#f0c674', 
-            padding: '10px 20px', 
-            borderRadius: '8px', 
-            fontSize: '16px', 
+
+        {/* КНОПКА НАЗАД */}
+        <button
+          onClick={onBack}
+          style={{
+            marginBottom: 20,
+            background: 'rgba(37, 37, 64, 0.8)',
+            border: '1px solid #f0c674',
+            color: '#f0c674',
+            padding: isMobile ? '12px 20px' : '10px 20px',
+            borderRadius: '8px',
+            fontSize: isMobile ? 15 : 16,
             fontWeight: 'bold',
-            cursor: 'pointer', 
+            cursor: 'pointer',
             backdropFilter: 'blur(5px)',
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
             transition: '0.2s',
-            boxShadow: '0 4px 15px rgba(0,0,0,0.5)'
+            boxShadow: '0 4px 15px rgba(0,0,0,0.5)',
+            minHeight: 48,
+            width: isMobile ? '100%' : 'auto'
           }}
           onMouseEnter={(e) => { e.currentTarget.style.background = '#f0c674'; e.currentTarget.style.color = '#000'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(37, 37, 64, 0.8)'; e.currentTarget.style.color = '#f0c674'; }}
@@ -50,21 +59,21 @@ export function Lobby({ socket, setRoomId, username, onBack }: { socket: Socket,
         </button>
 
         {/* Окно лобби */}
-        <div className="mobile-panel" style={{ width: '100%', background: 'rgba(37, 37, 64, 0.85)', backdropFilter: 'blur(10px)', padding: 30, borderRadius: 20, border: '2px solid #f0c674', boxShadow: '0 10px 30px rgba(0,0,0,0.8)', textAlign: 'center' }}>
-          <h1 style={{ color: '#f0c674', fontSize: 36, marginBottom: 10, marginTop: 0 }}>Лобби</h1>
-          <p style={{ color: 'white', marginBottom: 30 }}>Вы вошли как: <strong>{username}</strong></p>
-          
-          <div style={{ marginBottom: 40 }}>
-            <button onClick={() => createRoom('1v1')} style={{ padding: '15px 20px', margin: '5px 0', width: '100%', background: '#f0c674', border: 'none', borderRadius: 8, fontSize: 18, fontWeight: 'bold', cursor: 'pointer', color: '#000' }}>Создать 1 на 1</button>
-            <button onClick={() => createRoom('2v2')} style={{ padding: '15px 20px', margin: '5px 0', width: '100%', background: '#f0c674', border: 'none', borderRadius: 8, fontSize: 18, fontWeight: 'bold', cursor: 'pointer', color: '#000' }}>Создать 2 на 2</button>
+        <div className="mobile-panel" style={{ width: '100%', background: 'rgba(37, 37, 64, 0.85)', backdropFilter: 'blur(10px)', padding: isMobile ? 'clamp(20px, 5vw, 30px)' : 30, borderRadius: 20, border: '2px solid #f0c674', boxShadow: '0 10px 30px rgba(0,0,0,0.8)', textAlign: 'center', boxSizing: 'border-box' }}>
+          <h1 style={{ color: '#f0c674', fontSize: isMobile ? 28 : 36, marginBottom: 10, marginTop: 0 }}>Лобби</h1>
+          <p style={{ color: 'white', marginBottom: isMobile ? 20 : 30, fontSize: isMobile ? 15 : undefined }}>Вы вошли как: <strong>{username}</strong></p>
+
+          <div style={{ marginBottom: isMobile ? 30 : 40 }}>
+            <button onClick={() => createRoom('1v1')} style={{ padding: isMobile ? '14px 20px' : '15px 20px', margin: isMobile ? '4px 0' : '5px 0', width: '100%', background: '#f0c674', border: 'none', borderRadius: 8, fontSize: isMobile ? 17 : 18, fontWeight: 'bold', cursor: 'pointer', color: '#000', minHeight: 48 }}>Создать 1 на 1</button>
+            <button onClick={() => createRoom('2v2')} style={{ padding: isMobile ? '14px 20px' : '15px 20px', margin: isMobile ? '4px 0' : '5px 0', width: '100%', background: '#f0c674', border: 'none', borderRadius: 8, fontSize: isMobile ? 17 : 18, fontWeight: 'bold', cursor: 'pointer', color: '#000', minHeight: 48 }}>Создать 2 на 2</button>
           </div>
 
           <hr style={{ borderColor: '#444', marginBottom: 20 }} />
 
           <div>
-            <h3 style={{ color: '#aaa' }}>Или войти по ID</h3>
-            <input value={joinId} onChange={(e) => setJoinId(e.target.value)} placeholder="ID комнаты" style={{ padding: 15, width: '100%', borderRadius: 8, border: '1px solid #444', background: '#252540', color: 'white', fontSize: 18, textAlign: 'center', marginBottom: 15, boxSizing: 'border-box' }} />
-            <button onClick={joinRoom} style={{ padding: '15px 20px', width: '100%', background: '#4caf50', color: 'white', border: 'none', borderRadius: 8, fontSize: 18, fontWeight: 'bold', cursor: 'pointer' }}>Войти</button>
+            <h3 style={{ color: '#aaa', marginBottom: 15 }}>Или войти по ID</h3>
+            <input value={joinId} onChange={(e) => setJoinId(e.target.value)} placeholder="ID комнаты" style={{ padding: isMobile ? '14px' : '15px', width: '100%', borderRadius: 8, border: '1px solid #444', background: '#252540', color: 'white', fontSize: 18, textAlign: 'center', marginBottom: 15, boxSizing: 'border-box' }} />
+            <button onClick={joinRoom} style={{ padding: isMobile ? '14px 20px' : '15px 20px', width: '100%', background: '#4caf50', color: 'white', border: 'none', borderRadius: 8, fontSize: 18, fontWeight: 'bold', cursor: 'pointer', minHeight: 48 }}>Войти</button>
           </div>
         </div>
 

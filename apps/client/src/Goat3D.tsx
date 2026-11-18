@@ -3,7 +3,7 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { Float, Center } from '@react-three/drei';
 import * as THREE from 'three';
 
-const GoatModel = () => {
+const GoatModel = ({ scale = 1 }: { scale?: number }) => {
   const groupRef = useRef<THREE.Group>(null);
 
   useFrame((state, delta) => {
@@ -18,7 +18,7 @@ const GoatModel = () => {
   const eyeMat = <meshStandardMaterial color="#ff0000" emissive="#ff0000" emissiveIntensity={5} toneMapped={false} />;
 
   return (
-    <group ref={groupRef} scale={1.3}>
+    <group ref={groupRef} scale={scale}>
       {/* Основа черепа (темный металл) */}
       <mesh position={[0, 0, 0]}>
         <boxGeometry args={[1, 1.2, 0.8]} />
@@ -71,18 +71,20 @@ const GoatModel = () => {
 };
 
 export const Goat3D = () => {
+  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 820;
+  const size = isMobile ? 90 : 140;
   return (
-    <div style={{ width: '140px', height: '140px', margin: '0 auto', cursor: 'grab' }}>
-      <Canvas camera={{ position: [0, 0, 4.5], fov: 50 }}>
+    <div style={{ width: size, height: size, margin: '0 auto', cursor: 'grab' }}>
+      <Canvas camera={{ position: [0, 0, 4.5], fov: isMobile ? 60 : 50 }}>
         <ambientLight intensity={1.5} />
         {/* Свет, чтобы золото переливалось */}
         <directionalLight position={[5, 5, 5]} intensity={3} color="#ffffff" />
         <directionalLight position={[-5, 5, -5]} intensity={2} color="#f0c674" />
         <pointLight position={[0, -2, 2]} intensity={2} color="#ffd700" />
-        
+
         <Float speed={2} rotationIntensity={0.4} floatIntensity={2}>
           <Center>
-            <GoatModel />
+            <GoatModel scale={isMobile ? 0.8 : 1} />
           </Center>
         </Float>
       </Canvas>
