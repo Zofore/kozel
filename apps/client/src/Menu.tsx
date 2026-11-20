@@ -60,6 +60,7 @@ export function Menu({ socket, user, onPlay, onProfile, onFriends, onLogout, onR
       .catch(() => { if (active) setLeadersError('Рейтинг временно недоступен'); });
     return () => { active = false; };
   }, [leadersOpen]);
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth <= 820);
   const menuPanelRef = useRef<HTMLDivElement>(null);
   const [menuScale, setMenuScale] = useState(1);
 
@@ -86,7 +87,6 @@ export function Menu({ socket, user, onPlay, onProfile, onFriends, onLogout, onR
       window.visualViewport?.removeEventListener('resize', fitMenu);
     };
   }, [canResume, isMobile, user.username, user.status, user.wins, user.losses, user.rating, user.level, user.achievements?.length]);
-  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth <= 820);
   const defaultAvatar = `https://api.dicebear.com/7.x/adventurer/svg?seed=${user.username}`;
   const avatar = user.avatar || defaultAvatar;
   const isDev = user.isAdmin === true;
