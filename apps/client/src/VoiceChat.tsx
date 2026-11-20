@@ -20,6 +20,8 @@ export function VoiceChat({ socket, roomId }: { socket: Socket; roomId: string }
   const [mode, setMode] = useState<Mode>('all');
   const [roomMode, setRoomMode] = useState('1v1');
   const [expanded, setExpanded] = useState(false);
+  // Mobile: keep a small voice tab visible without covering game controls.
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [peers, setPeers] = useState<Peer[]>([]);
   const [mutedPeers, setMutedPeers] = useState<number[]>([]);
   const [error, setError] = useState('');
@@ -81,6 +83,7 @@ export function VoiceChat({ socket, roomId }: { socket: Socket; roomId: string }
       enabled.current=true;
       setMicOn(false);
       setExpanded(true);
+      setMobileOpen(true);
       setActive(true);
     } catch {
       if(mounted.current) setError('Нет доступа к микрофону. Разреши его в настройках браузера.');
@@ -215,7 +218,16 @@ export function VoiceChat({ socket, roomId }: { socket: Socket; roomId: string }
   };
 
   return (
-    <section className="kozel-voice" aria-label="Голосовой чат игроков">
+    <section className={`kozel-voice${mobileOpen ? ' kozel-voice--mobile-open' : ''}`} aria-label="Голосовой чат игроков">
+      <button
+        type="button"
+        className="kozel-voice__mobile-toggle"
+        onClick={() => setMobileOpen(value => !value)}
+        aria-expanded={mobileOpen}
+        aria-label={mobileOpen ? 'Свернуть голосовой чат' : 'Открыть голосовой чат'}
+        title={mobileOpen ? 'Свернуть голосовой чат' : 'Голосовой чат'}
+      >{mobileOpen ? '✕' : (micOn ? '🎙' : '🎤')}</button>
+      <div className="kozel-voice__content">
       <div className="kozel-voice__bar">
         <span className="kozel-voice__title">🎙 Голос</span>
         {!active ? <button type="button" onClick={start} disabled={connecting}>{connecting?'Подключение…':'Подключиться'}</button> : <>
@@ -242,6 +254,7 @@ export function VoiceChat({ socket, roomId }: { socket: Socket; roomId: string }
         <div className="kozel-voice__hint">Для устойчивой связи через некоторые мобильные сети нужен TURN. Голос не записывается сервером игры.</div>
       </div>}
       {!expanded && error && <div className="kozel-voice__error" role="status">{error}</div>}
+      </div>
     </section>
   );
 }

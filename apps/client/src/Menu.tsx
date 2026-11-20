@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { Socket } from 'socket.io-client';
 import { AdminPanel } from './AdminPanel';
 import { Goat3D } from './Goat3D';
@@ -60,6 +60,32 @@ export function Menu({ socket, user, onPlay, onProfile, onFriends, onLogout, onR
       .catch(() => { if (active) setLeadersError('Рейтинг временно недоступен'); });
     return () => { active = false; };
   }, [leadersOpen]);
+  const menuPanelRef = useRef<HTMLDivElement>(null);
+  const [menuScale, setMenuScale] = useState(1);
+
+  // Keep the entire menu visible without page or panel scrolling.
+  useLayoutEffect(() => {
+    const fitMenu = () => {
+      const panel = menuPanelRef.current;
+      if (!panel) return;
+      // Measure at natural size; a scaled measurement would compound on resize.
+      const currentZoom = panel.style.zoom;
+      panel.style.zoom = '1';
+      const naturalHeight = panel.getBoundingClientRect().height;
+      panel.style.zoom = currentZoom;
+      const viewportHeight = window.visualViewport?.height || window.innerHeight;
+      const availableHeight = Math.max(1, viewportHeight - 16);
+      const nextScale = naturalHeight > 0 ? Math.min(1, availableHeight / naturalHeight) : 1;
+      setMenuScale(prev => Math.abs(prev - nextScale) < 0.002 ? prev : nextScale);
+    };
+    fitMenu();
+    window.addEventListener('resize', fitMenu);
+    window.visualViewport?.addEventListener('resize', fitMenu);
+    return () => {
+      window.removeEventListener('resize', fitMenu);
+      window.visualViewport?.removeEventListener('resize', fitMenu);
+    };
+  }, [canResume, isMobile, user.username, user.status, user.wins, user.losses, user.rating, user.level, user.achievements?.length]);
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth <= 820);
   const defaultAvatar = `https://api.dicebear.com/7.x/adventurer/svg?seed=${user.username}`;
   const avatar = user.avatar || defaultAvatar;
@@ -72,22 +98,29 @@ export function Menu({ socket, user, onPlay, onProfile, onFriends, onLogout, onR
   }, []);
 
   return (
-    <div className="mobile-screen kozel-main-menu" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', height: '100dvh', minHeight: '100dvh', maxHeight: '100dvh', overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', background: 'transparent', color: 'white', position: 'relative', padding: 'max(16px, env(safe-area-inset-top, 0px)) 16px max(28px, env(safe-area-inset-bottom, 0px))', boxSizing: 'border-box' }}>
+    <div className="mobile-screen kozel-main-menu" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100dvh', minHeight: '100dvh', maxHeight: '100dvh', overflow: 'hidden', background: 'transparent', color: 'white', position: 'relative', padding: '8px 12px', boxSizing: 'border-box' }}>
       
       <style>{devStyles + `
-/* Only main menu scrolls, while the game screen keeps its original layout. */
+/* The entire menu fits within the viewport; scrolling is intentionally disabled. */
 .mobile-screen.kozel-main-menu {
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
   height: 100dvh !important;
-  min-height: 100dvh !important;
-  max-height: 100dvh !important;
-  overscroll-behavior-y: contain;
+  overflow: hidden !important;
 }
 .mobile-screen.kozel-main-menu > .kozel-main-menu-panel {
   flex-shrink: 0;
-  margin-top: auto;
-  margin-bottom: auto;
+  overflow: hidden;
+}
+/* Reduce unused space first; scale to the remaining available height in React. */
+@media (max-height: 900px) {
+  .kozel-main-menu-panel { padding: 12px 18px !important; }
+  .kozel-main-menu-panel > button {
+    min-height: 38px !important;
+    padding: 7px 10px !important;
+    margin-bottom: 6px !important;
+    font-size: 14px !important;
+  }
+  .kozel-main-menu-panel > div:first-of-type { margin-bottom: 6px !important; }
+  .kozel-main-menu-panel > p { margin-top: 3px !important; margin-bottom: 5px !important; }
 }
 `}</style>
 
@@ -112,18 +145,18 @@ export function Menu({ socket, user, onPlay, onProfile, onFriends, onLogout, onR
       )}
       {adminOpen && <AdminPanel socket={socket} username={user.username} onClose={() => setAdminOpen(false)} />}
 
-      <div className="mobile-panel kozel-main-menu-panel" style={{ background: 'rgba(37, 37, 64, 0.85)', backdropFilter: 'blur(10px)', padding: isMobile ? 'clamp(20px, 5vw, 30px)' : 40, borderRadius: 20, boxShadow: '0 10px 30px rgba(0,0,0,0.8), 0 0 20px rgba(240,198,116,0.2)', border: isDev ? '2px solid #ffd700' : '2px solid #f0c674', textAlign: 'center', width: '100%', maxWidth: isMobile ? 'calc(100vw - 32px)' : 320, boxSizing: 'border-box' }}>
+      <div ref={menuPanelRef} className="mobile-panel kozel-main-menu-panel" style={{ zoom: menuScale, background: 'rgba(37, 37, 64, 0.85)', backdropFilter: 'blur(10px)', padding: isMobile ? 'clamp(20px, 5vw, 30px)' : 40, borderRadius: 20, boxShadow: '0 10px 30px rgba(0,0,0,0.8), 0 0 20px rgba(240,198,116,0.2)', border: isDev ? '2px solid #ffd700' : '2px solid #f0c674', textAlign: 'center', width: '100%', maxWidth: isMobile ? 'calc(100vw - 32px)' : 320, boxSizing: 'border-box' }}>
 
         <div style={{ margin: isMobile ? '0 auto 10px' : '0 auto 15px', display: 'inline-block' }}>
           <div className={isDev ? 'dev-avatar-frame' : ''} style={{ display: 'inline-flex', padding: isDev ? undefined : 0 }}>
-            <div style={{ width: isMobile ? 80 : 110, height: isMobile ? 80 : 110, borderRadius: '50%', background: '#e0e0e0', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', border: isDev ? 'none' : '3px solid #f0c674', boxShadow: isDev ? 'none' : '0 0 15px rgba(240,198,116,0.5)' }}>
+            <div className="kozel-menu-avatar" style={{ width: isMobile ? 80 : 110, height: isMobile ? 80 : 110, borderRadius: '50%', background: '#e0e0e0', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', border: isDev ? 'none' : '3px solid #f0c674', boxShadow: isDev ? 'none' : '0 0 15px rgba(240,198,116,0.5)' }}>
               <img src={avatar} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
           </div>
         </div>
 
         {/* 🔽 3D КОЗЁЛ 🔽 */}
-        <h1 style={{ margin: isMobile ? '0 0 5px 0' : '0 0 5px 0', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <h1 className="kozel-menu-goat" style={{ margin: isMobile ? '0 0 5px 0' : '0 0 5px 0', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <Goat3D />
           <span style={{ color: '#f0c674', fontSize: isMobile ? 24 : 32, fontWeight: 900, textShadow: '0 0 15px rgba(240,198,116,0.6)', letterSpacing: '1px', marginTop: '-10px' }}>
             Козёл
@@ -160,13 +193,13 @@ export function Menu({ socket, user, onPlay, onProfile, onFriends, onLogout, onR
           {(user.achievements || []).includes('hundred_wins') && <span title="100 побед" style={{marginRight:8}}>🏆 100 побед</span>}
           {(user.achievements || []).includes('ten_games') && <span title="10 партий">🎴 10 партий</span>}
         </div>
-        <button onClick={() => setHistoryOpen(true)} style={{ padding:12, width:'100%', background:'#252540', color:'#f0c674', border:'1px solid #f0c674', borderRadius:8, fontWeight:'bold', marginBottom:10, cursor:'pointer', minHeight:44 }}>🎴 История партий</button>
-        <button onClick={() => setLeadersOpen(true)} style={{ padding:12, width:'100%', background:'#252540', color:'#f0c674', border:'1px solid #f0c674', borderRadius:8, fontWeight:'bold', marginBottom:10, cursor:'pointer', minHeight:44 }}>🏆 Рейтинг игроков</button>
-        {canResume && <button onClick={onResume} style={{ padding: 14, width: '100%', background: '#f0c674', color: '#1a1a2e', border: 'none', borderRadius: 8, fontSize: 17, fontWeight: 'bold', cursor: 'pointer', marginBottom: 10, minHeight: 48 }}>↩ Вернуться в партию</button>}
-        <button onClick={onPlay} style={{ padding: isMobile ? '14px' : '15px', width: '100%', background: '#4caf50', color: 'white', border: 'none', borderRadius: 8, fontSize: isMobile ? 16 : 18, fontWeight: 'bold', cursor: 'pointer', marginBottom: 10, boxShadow: '0 4px 0 #2e7d32', minHeight: 48 }}>Играть</button>
-        <button onClick={onFriends} style={{ padding: isMobile ? '14px' : '15px', width: '100%', background: '#0f3460', color: 'white', border: '1px solid #f0c674', borderRadius: 8, fontSize: isMobile ? 15 : 16, fontWeight: 'bold', cursor: 'pointer', marginBottom: 10, minHeight: 48 }}>👥 Друзья</button>
-        <button onClick={onProfile} style={{ padding: isMobile ? '14px' : '15px', width: '100%', background: 'transparent', color: '#aaa', border: '1px solid #555', borderRadius: 8, fontSize: isMobile ? 15 : 16, cursor: 'pointer', marginBottom: isMobile ? 10 : 15, minHeight: 48 }}>⚙️ Настройки</button>
-        <button onClick={onLogout} style={{ padding: isMobile ? '12px' : '10px', width: '100%', background: 'transparent', color: '#f44336', border: '1px solid #f44336', borderRadius: 8, fontSize: isMobile ? 14 : 14, cursor: 'pointer', minHeight: 44 }}>Выйти</button>
+        <button className="kozel-menu-action" onClick={() => setHistoryOpen(true)} style={{ padding:12, width:'100%', background:'#252540', color:'#f0c674', border:'1px solid #f0c674', borderRadius:8, fontWeight:'bold', marginBottom:10, cursor:'pointer', minHeight:44 }}>🎴 История партий</button>
+        <button className="kozel-menu-action" onClick={() => setLeadersOpen(true)} style={{ padding:12, width:'100%', background:'#252540', color:'#f0c674', border:'1px solid #f0c674', borderRadius:8, fontWeight:'bold', marginBottom:10, cursor:'pointer', minHeight:44 }}>🏆 Рейтинг игроков</button>
+        {canResume && <button className="kozel-menu-action" onClick={onResume} style={{ padding: 14, width: '100%', background: '#f0c674', color: '#1a1a2e', border: 'none', borderRadius: 8, fontSize: 17, fontWeight: 'bold', cursor: 'pointer', marginBottom: 10, minHeight: 48 }}>↩ Вернуться в партию</button>}
+        <button className="kozel-menu-action" onClick={onPlay} style={{ padding: isMobile ? '14px' : '15px', width: '100%', background: '#4caf50', color: 'white', border: 'none', borderRadius: 8, fontSize: isMobile ? 16 : 18, fontWeight: 'bold', cursor: 'pointer', marginBottom: 10, boxShadow: '0 4px 0 #2e7d32', minHeight: 48 }}>Играть</button>
+        <button className="kozel-menu-action" onClick={onFriends} style={{ padding: isMobile ? '14px' : '15px', width: '100%', background: '#0f3460', color: 'white', border: '1px solid #f0c674', borderRadius: 8, fontSize: isMobile ? 15 : 16, fontWeight: 'bold', cursor: 'pointer', marginBottom: 10, minHeight: 48 }}>👥 Друзья</button>
+        <button className="kozel-menu-action" onClick={onProfile} style={{ padding: isMobile ? '14px' : '15px', width: '100%', background: 'transparent', color: '#aaa', border: '1px solid #555', borderRadius: 8, fontSize: isMobile ? 15 : 16, cursor: 'pointer', marginBottom: isMobile ? 10 : 15, minHeight: 48 }}>⚙️ Настройки</button>
+        <button className="kozel-menu-action" onClick={onLogout} style={{ padding: isMobile ? '12px' : '10px', width: '100%', background: 'transparent', color: '#f44336', border: '1px solid #f44336', borderRadius: 8, fontSize: isMobile ? 14 : 14, cursor: 'pointer', minHeight: 44 }}>Выйти</button>
       </div>
 
       {isDev && (
