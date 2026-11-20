@@ -10,9 +10,9 @@ const pool = new Pool({ connectionString: url.toString(), ssl: process.env.DB_TL
 if (process.env.NODE_ENV === 'production' && process.env.DB_TLS === 'disable') throw new Error('TLS required in production');
 export interface User {
   id: number; username: string; password: string; fullname: string; email: string;
-  avatar: string; status: string; friends: string[]; friendRequests: string[]; wins: number; losses: number;
+  avatar: string; status: string; friends: string[]; friendRequests: string[]; wins: number; losses: number; rating: number; xp: number;
 }
-const publicColumns = 'id, username, fullname, avatar, status, friends, friendrequests AS "friendRequests", wins, losses';
+const publicColumns = 'id, username, fullname, avatar, status, friends, friendrequests AS "friendRequests", wins, losses, rating, xp';
 const columns = publicColumns + ', password, email';
 async function transaction<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
   const client = await pool.connect();
@@ -32,7 +32,11 @@ export const db = {
       await client.query('LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE');
       await client.query('CREATE UNIQUE INDEX IF NOT EXISTS users_username_lower_idx ON users (lower(username))');
       await client.query(`SELECT setval(pg_get_serial_sequence('users','id'), GREATEST(COALESCE((SELECT MAX(id) FROM users),0)+1, nextval(pg_get_serial_sequence('users','id'))), false)`);
+      await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS rating INTEGER NOT NULL DEFAULT 1000');
+      await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS xp INTEGER NOT NULL DEFAULT 0');
       await client.query('CREATE TABLE IF NOT EXISTS settled_matches (match_id TEXT PRIMARY KEY, created_at TIMESTAMPTZ NOT NULL DEFAULT now())');
+      await client.query(`CREATE TABLE IF NOT EXISTS match_history (match_id TEXT NOT NULL REFERENCES settled_matches(match_id), username TEXT NOT NULL, won BOOLEAN NOT NULL, opponents JSONB NOT NULL DEFAULT '[]'::jsonb, finished_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (match_id, username))`);
+      await client.query('CREATE INDEX IF NOT EXISTS match_history_user_date_idx ON match_history(username, finished_at DESC)');
     });
   },
   async getUsers(): Promise<Omit<User,'password'|'email'>[]> { return (await pool.query(`SELECT ${publicColumns} FROM users ORDER BY id`)).rows; },
@@ -72,14 +76,24 @@ export const db = {
       return null;
     });
   },
+  async getLeaderboard(limit = 50) {
+    const rows = (await pool.query(`SELECT id, username, fullname, avatar, wins, losses, rating, xp FROM users ORDER BY rating DESC, wins DESC, id ASC LIMIT $1`, [Math.min(100, Math.max(1, Math.trunc(limit)))] )).rows;
+    return rows.map((row, index) => ({ rank: index + 1, username: row.username, fullname: row.fullname, avatar: row.avatar || '', wins: row.wins, losses: row.losses, rating: row.rating, xp: row.xp }));
+  },
+  async getMatchHistory(username: string, limit = 20) {
+    const capped = Math.min(50, Math.max(1, Math.trunc(limit)));
+    const result = await pool.query(`SELECT match_id AS "matchId", won, opponents, finished_at AS "finishedAt" FROM match_history WHERE username=$1 ORDER BY finished_at DESC, match_id DESC LIMIT $2`, [username, capped]);
+    return result.rows as {matchId:string;won:boolean;opponents:string[];finishedAt:string}[];
+  },
   async settleMatch(matchId: string, players: { name: string; won: boolean }[]) {
     await transaction(async client => {
       const inserted = await client.query('INSERT INTO settled_matches(match_id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING match_id',[matchId]);
       if (!inserted.rowCount) return;
       await client.query('SELECT id FROM users WHERE username=ANY($1::text[]) ORDER BY id FOR UPDATE',[players.map(p=>p.name)]);
       for (const player of players) {
-        const result = await client.query('UPDATE users SET wins=COALESCE(wins,0)+$2, losses=COALESCE(losses,0)+$3 WHERE username=$1',[player.name, player.won ? 1 : 0, player.won ? 0 : 1]);
+        const result = await client.query('UPDATE users SET wins=COALESCE(wins,0)+$2, losses=COALESCE(losses,0)+$3, rating=GREATEST(0,COALESCE(rating,1000)+$4), xp=COALESCE(xp,0)+$5 WHERE username=$1',[player.name, player.won ? 1 : 0, player.won ? 0 : 1, player.won ? 20 : -15, player.won ? 100 : 35]);
         if (result.rowCount !== 1) throw new Error('Match player not found');
+        await client.query('INSERT INTO match_history(match_id,username,won,opponents) VALUES ($1,$2,$3,$4::jsonb)', [matchId, player.name, player.won, JSON.stringify(players.filter(p=>p.name!==player.name).map(p=>p.name))]);
       }
     });
   }

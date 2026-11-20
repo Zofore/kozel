@@ -1,5 +1,6 @@
 import { applyEvent, ApplyResult, GameEvent } from './apply';
 import { GameState } from './state';
+import { chooseBotMove, chooseBotDiscard, BotDifficulty } from './bot';
 import { getLegalMoves } from './legalMoves';
 
 export function applyTurn(state: GameState, event: GameEvent): ApplyResult {
@@ -9,13 +10,12 @@ export function applyTurn(state: GameState, event: GameEvent): ApplyResult {
   }
   return result;
 }
-export function automaticTurn(state: GameState, preferBeat = false): ApplyResult {
+export function automaticTurn(state: GameState, preferBeat = false, difficulty?: BotDifficulty): ApplyResult {
   const player = state.currentPlayer;
-  const hand = state.players[player].hand;
-  const move = getLegalMoves(state, player)[0];
+  const move = difficulty ? chooseBotMove(state, difficulty) : getLegalMoves(state, player)[0]?.map(k => state.players[player].hand.find(c => `${c.rank}_${c.suit}` === k)!).filter(Boolean);
   if (move && (!state.trick || preferBeat)) {
-    return applyTurn(state, { type: state.trick ? 'BEAT' : 'ATTACK', player, cards: hand.filter(c => move.includes(`${c.rank}_${c.suit}`)) });
+    return applyTurn(state, { type: state.trick ? 'BEAT' : 'ATTACK', player, cards: move });
   }
-  if (state.trick) return applyTurn(state, { type: 'PASS', player, cards: hand.slice(0, state.trick.required) });
+  if (state.trick) return applyTurn(state, { type: 'PASS', player, cards: difficulty ? chooseBotDiscard(state, difficulty) : state.players[player].hand.slice(0,state.trick.required) });
   return { ok: false, error: 'ILLEGAL_SET' };
 }

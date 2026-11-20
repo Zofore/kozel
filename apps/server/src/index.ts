@@ -1,8 +1,8 @@
 import 'dotenv/config';
-import { randomUUID, randomInt } from 'node:crypto';
+import { randomUUID, randomInt, createHmac } from 'node:crypto';
 import Fastify from 'fastify';
 import { Server } from 'socket.io';
-import { applyEvent, applyTurn, automaticTurn, GameState, project, getLegalMoves, PlayerId } from '@kozel/game-core';
+import { applyEvent, applyTurn, automaticTurn, GameState, project, getLegalMoves, PlayerId, normalizeBotDifficulty } from '@kozel/game-core';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { db } from './db';
@@ -36,7 +36,19 @@ function verifyToken(token: unknown) {
   if (!Number.isInteger(decoded.id) || typeof decoded.username !== 'string') throw new Error('Invalid token');
   return decoded;
 }
-const publicUser = (u: any) => ({ username: u.username, fullname: u.fullname, avatar: u.avatar || '', status: u.status || 'В сети', wins: u.wins || 0, losses: u.losses || 0, online: onlineUsers.has(u.username), isAdmin: isAdminId(u.id) });
+const playerProgress = (u: any) => {
+  const wins = Number(u.wins || 0);
+  const losses = Number(u.losses || 0);
+  const xp = Number(u.xp || 0);
+  const rating = Number(u.rating ?? 1000);
+  return { xp, rating, level: Math.floor(xp / 500) + 1, league: rating >= 1800 ? 'Алмаз' : rating >= 1500 ? 'Платина' : rating >= 1300 ? 'Золото' : rating >= 1100 ? 'Серебро' : 'Бронза', achievements: [
+    ...(wins >= 1 ? ['first_win'] : []),
+    ...(wins >= 10 ? ['ten_wins'] : []),
+    ...(wins >= 100 ? ['hundred_wins'] : []),
+    ...(wins + losses >= 10 ? ['ten_games'] : [])
+  ] };
+};
+const publicUser = (u: any) => ({ ...playerProgress(u), username: u.username, fullname: u.fullname, avatar: u.avatar || '', status: u.status || 'В сети', wins: u.wins || 0, losses: u.losses || 0, online: onlineUsers.has(u.username), isAdmin: isAdminId(u.id) });
 const validText = (value: unknown, max: number) => typeof value === 'string' && value.length <= max;
 async function main() {
   await db.init();
@@ -88,6 +100,29 @@ async function main() {
     if (!u || u.id !== identity.id) return reply.code(401).send({error:'Требуется авторизация'});
     return { ...publicUser(u), isAdmin: isAdminId(u.id) };
   });
+  app.get('/api/matches/history', async (req) => {
+    const identity = (req as any).identity;
+    return { matches: await db.getMatchHistory(identity.username, 20) };
+  });
+  // TURN credentials are short-lived and generated after JWT authentication.
+  // Configure coturn with use-auth-secret and the same TURN_SHARED_SECRET.
+  app.get('/api/voice/ice', async (req) => {
+    const identity = (req as any).identity;
+    const urls = (process.env.TURN_URLS || '').split(',').map(v=>v.trim()).filter(Boolean);
+    const secret = process.env.TURN_SHARED_SECRET || '';
+    const iceServers: any[] = [{urls:'stun:stun.l.google.com:19302'}];
+    if (urls.length && secret.length >= 32) {
+      const expires = Math.floor(Date.now()/1000) + 3600;
+      const username = `${expires}:${identity.id}`;
+      const credential = createHmac('sha1',secret).update(username).digest('base64');
+      iceServers.push({urls,username,credential});
+    }
+    return {iceServers};
+  });
+  app.get('/api/leaderboard', async () => {
+    const rows = await db.getLeaderboard(50);
+    return { players: rows.map(row => ({ ...row, ...playerProgress(row) })) };
+  });
   app.get('/api/user/profile/:username', async (req, reply) => {
     const user = await db.getUser((req.params as any).username);
     if (!user) return reply.code(404).send({ error: 'Пользователь не найден' });
@@ -95,7 +130,7 @@ async function main() {
   });
   app.post('/api/user/update', async (req, reply) => {
     const { status, avatar } = (req.body || {}) as any;
-    if ((status !== undefined && !validText(status,255)) || (avatar !== undefined && (!validText(avatar,2048) || (avatar && !/^https?:\/\//i.test(avatar))))) return reply.code(400).send({ error: 'Некорректный профиль' });
+    if ((status !== undefined && !validText(status,255)) || (avatar !== undefined && (!validText(avatar,180000) || (avatar && !/^https?:\/\//i.test(avatar) && !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(avatar))))) return reply.code(400).send({ error: 'Некорректный профиль' });
     if (!await db.updateProfile((req as any).identity.username,status,avatar)) return reply.code(404).send({ error: 'Пользователь не найден' });
     return { success: true };
   });
@@ -165,7 +200,7 @@ async function main() {
     const run = async (bot = false) => {
       const current = rooms.get(roomId);
       if (!current || current.phase !== 'playing' || current.stateVersion !== version) return;
-      const res = automaticTurn(current, bot);
+      const res = bot ? automaticTurn(current, true, normalizeBotDifficulty(process.env.BOT_DIFFICULTY)) : automaticTurn(current);
       if (res.ok) await checkAndBroadcast(io, roomId, res.state);
       else { app.log.error({roomId, error:res.error}, 'Automatic turn failed'); startTurnTimer(io,roomId); broadcastState(io,roomId,current); }
     };
@@ -217,12 +252,14 @@ async function main() {
 
   function removeRoom(roomId: string, reason: string) {
     io.to(roomId).emit('kicked',reason); io.in(roomId).socketsLeave(roomId);
+    for (const id of playersInRoom.get(roomId) || []) if(id) leaveVoice(id);
     rooms.delete(roomId); playersInRoom.delete(roomId); frozenPlayers.delete(roomId); roomActivity.delete(roomId); clearTurnTimer(roomId);
   }
   function detach(socket: any, roomId: string, explicit = false) {
     const room = rooms.get(roomId), seats = playersInRoom.get(roomId);
     if (!room || !seats) return;
     const idx = seats.indexOf(socket.id); if (idx < 0) return;
+    leaveVoice(socket.id);
     seats[idx] = ''; room.players[idx].connected = false; socket.leave(roomId);
     if (explicit && room.phase === 'waiting') {
       const name=room.players[idx].name;
@@ -246,6 +283,7 @@ async function main() {
     const oldSocket = seats[idx];
     if (oldSocket && oldSocket !== socket.id) { io.to(oldSocket).emit('kicked','Вход выполнен с другого подключения'); io.sockets.sockets.get(oldSocket)?.leave(roomId); }
     seats[idx] = socket.id; room.players[idx].name = name; room.players[idx].connected = true; room.players[idx].isAdmin=isAdminId(socket.data.user.id);
+    if (oldSocket && oldSocket !== socket.id) leaveVoice(oldSocket);
     socket.join(roomId); roomActivity.set(roomId,Date.now());
     if (newSeat && room.players[idx].isAdmin && !roomId.startsWith('DEV-')) io.to(roomId).emit('dev_joined',{name});
     if (room.phase === 'waiting' && seats.every(Boolean)) rollDiceForRoom(io,roomId);
@@ -261,6 +299,40 @@ async function main() {
       if (now - (roomActivity.get(id) || now) > 30*60_000 && !settling.has(id) && (room.phase !== 'finished' || room.settled || id.startsWith('DEV-'))) removeRoom(id,'Комната закрыта из-за неактивности');
     }
   },60_000); maintenance.unref();
+
+  // Room-scoped voice signalling; audio never travels through the game server.
+  // Peers must explicitly opt in, and signalling is restricted to permitted seats.
+  type VoiceSettings = { roomId: string; mode: 'team' | 'all' };
+  const voiceMembers = new Map<string, VoiceSettings>();
+  const voiceAllowed = (a: string, b: string): boolean => {
+    const settingsA = voiceMembers.get(a), settingsB = voiceMembers.get(b);
+    if (!settingsA || !settingsB || settingsA.roomId !== settingsB.roomId) return false;
+    const seats = playersInRoom.get(settingsA.roomId);
+    const room = rooms.get(settingsA.roomId);
+    if (!seats || !room) return false;
+    const ia = seats.indexOf(a), ib = seats.indexOf(b);
+    if (ia < 0 || ib < 0 || ia === ib) return false;
+    if (room.mode === '1v1') return settingsA.mode === 'all' && settingsB.mode === 'all';
+    return room.players[ia].side === room.players[ib].side || (settingsA.mode === 'all' && settingsB.mode === 'all');
+  };
+  const refreshVoice = (roomId: string) => {
+    const seats = playersInRoom.get(roomId), room = rooms.get(roomId);
+    if (!seats || !room) return;
+    for (let i = 0; i < seats.length; i++) {
+      const id = seats[i];
+      if (!id || !voiceMembers.has(id)) continue;
+      io.to(id).emit('voice_roster', {
+        selfIndex: i,
+        mode: room.mode,
+        peers: seats.flatMap((other, j) => other && other !== id && voiceAllowed(id, other)
+          ? [{ index:j, name:room.players[j].name }] : [])
+      });
+    }
+  };
+  const leaveVoice = (socketId: string) => {
+    const current = voiceMembers.get(socketId);
+    if (current) { voiceMembers.delete(socketId); refreshVoice(current.roomId); }
+  };
 
   io.on('connection', (socket) => {
     const myName = socket.data.user.username as string;
@@ -282,11 +354,38 @@ async function main() {
     });
     socket.on('error',()=>{});
     socket.on('register_online', () => {});
-    socket.on('disconnect', () => {
+    socket.on('voice_join', (data: any, callback?: (result:any)=>void) => {
+      const respond = (result: any) => { if (typeof callback === 'function') callback(result); };
+      if (!data || typeof data.roomId !== 'string' || !['all','team'].includes(data.mode)
+        || !isMember(data.roomId) || !rooms.has(data.roomId)) return respond({error:'Голосовой чат недоступен'});
+      const room = rooms.get(data.roomId)!;
+      if (room.mode === '1v1' && data.mode === 'team') return respond({error:'Для 1×1 доступен режим «Все»'});
+      const previous = voiceMembers.get(socket.id);
+      voiceMembers.set(socket.id,{roomId:data.roomId,mode:data.mode});
+      if (previous && previous.roomId !== data.roomId) refreshVoice(previous.roomId);
+      respond({ok:true}); refreshVoice(data.roomId);
+    });
+    socket.on('voice_leave', () => leaveVoice(socket.id));
+    socket.on('voice_signal', (data: any) => {
+      if (!data || typeof data.roomId !== 'string' || !Number.isInteger(data.toIndex)
+        || !data.signal || typeof data.signal !== 'object') return;
+      const signal = data.signal;
+      if (!['offer','answer','candidate'].includes(signal.type)) return;
+      if (JSON.stringify(signal).length > 12000) return;
+      const seats = playersInRoom.get(data.roomId);
+      if (!seats || !isMember(data.roomId) || voiceMembers.get(socket.id)?.roomId !== data.roomId) return;
+      if (data.toIndex < 0 || data.toIndex >= seats.length) return;
+      const target = seats[data.toIndex];
+      if (!target || !voiceAllowed(socket.id,target)) return;
+      const fromIndex = seats.indexOf(socket.id);
+      if (fromIndex < 0) return;
+      io.to(target).emit('voice_signal',{fromIndex,signal});
+    });
+    socket.on('disconnect', () => { leaveVoice(socket.id);
       if (onlineUsers.get(myName) === socket.id) { onlineUsers.delete(myName); socket.broadcast.emit('user_status_change',{username:myName,online:false}); }
       const id = findRoomOfSocket(socket.id); if (id) detach(socket,id);
     });
-    socket.on('leave_room', (roomId: string) => { if (isMember(roomId)) detach(socket,roomId,true); });
+    socket.on('leave_room', (roomId: string) => { if (isMember(roomId)) { leaveVoice(socket.id); detach(socket,roomId,true); } });
     socket.on('send_invite', ({ to, roomId }, callback?: (res:any)=>void) => {
       const respond=(result:any)=>{if(typeof callback==='function') callback(result);};
       if (typeof to !== 'string' || typeof roomId !== 'string' || !isMember(roomId) || rooms.get(roomId)?.phase !== 'waiting' || to === myName) return respond({error:'Приглашение недоступно'});

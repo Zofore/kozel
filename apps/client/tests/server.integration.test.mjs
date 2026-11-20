@@ -49,6 +49,27 @@ test('HTTP authorization, friends, room capacity, invitations and reconnect', {t
     assert.equal((await ack(sd,'join_room',room)).roomId,room);
     assert((await ack(se,'join_room',room)).error);
     const state=await started;assert.equal(state.players.length,4);assert.equal(state.hand.length,6);assert.equal(state.players[1].hand,undefined);
+    // Voice signalling must be opt-in and restricted to actual room members.
+    const ice=await call('/api/voice/ice',undefined,a.token);
+    assert.equal(ice.status,200);
+    assert(Array.isArray(ice.data.iceServers));
+    assert((await ack(se,'voice_join',{roomId,mode:'all'})).error);
+    assert.equal((await ack(sa,'voice_join',{roomId,mode:'all'})).ok,true);
+    const voiceRoster=waitFor(sa,'voice_roster',r=>r.peers.some(p=>p.index===1));
+    assert.equal((await ack(sb,'voice_join',{roomId,mode:'all'})).ok,true);
+    assert((await voiceRoster).peers.some(p=>p.index===1));
+    const voiceSignal=waitFor(sb,'voice_signal',v=>v.fromIndex===0&&v.signal?.type==='candidate');
+    sa.emit('voice_signal',{roomId,toIndex:1,signal:{type:'candidate',candidate:{candidate:'test'}}});
+    assert.equal((await voiceSignal).fromIndex,0);
+    const restrictedRoster=waitFor(sa,'voice_roster',r=>r.peers.length===0);
+    assert.equal((await ack(sa,'voice_join',{roomId,mode:'team'})).ok,true);
+    assert.equal((await restrictedRoster).peers.length,0);
+    let leaked=false;
+    sb.on('voice_signal',()=>{leaked=true;});
+    sa.emit('voice_signal',{roomId,toIndex:1,signal:{type:'candidate',candidate:{candidate:'should-not-arrive'}}});
+    await delay(120);
+    assert.equal(leaked,false);
+    sa.emit('voice_leave'); sb.emit('voice_leave');
     const disconnected=waitFor(sa,'game_state',s=>s.roomId===room&&s.players[1].connected===false);
     sb.disconnect();await disconnected;
     const replacement=await connect(b.token);sockets.push(replacement);
