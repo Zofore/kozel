@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Socket } from 'socket.io-client';
 import { AdminPanel } from './AdminPanel';
 import { Goat3D } from './Goat3D';
