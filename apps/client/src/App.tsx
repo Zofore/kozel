@@ -7,6 +7,8 @@ import { Game } from './Game';
 import { ProfileSettings } from './ProfileSettings';
 import { Friends } from './Friends';
 import { MenuBackground } from './MenuBackground';
+import { RadioPlayer } from './RadioPlayer';
+import { VoiceChat } from './VoiceChat';
 import { DevConsole } from './DevConsole';
 
 import { API_URL, apiFetch, checkedJson } from './api';
@@ -79,6 +81,7 @@ export function App() {
   });
   
   const [roomId, setRoomId] = useState<string | null>(() => localStorage.getItem('kozel_room'));
+  const [resumeRoomId, setResumeRoomId] = useState<string | null>(() => localStorage.getItem('kozel_resume_room'));
   const [view, setView] = useState<'menu' | 'lobby' | 'profile' | 'friends'>('menu');
   
   const [friendRequestToast, setFriendRequestToast] = useState<string | null>(null);
@@ -94,7 +97,22 @@ export function App() {
 
   const isDev = user?.isAdmin === true;
 
+  // Refresh progress after leaving a match, without requiring a new login.
+  useEffect(() => {
+    if (!user?.username || roomId || view !== 'menu') return;
+    let active = true;
+    apiFetch(`${API_URL}/api/me`).then(async response => {
+      if (!response.ok) return;
+      const current = await response.json();
+      if (active) setUser((previous: any) => previous ? { ...previous, ...current } : previous);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [roomId, view, user?.username]);
+
+
+
   useEffect(() => { if (roomId) localStorage.setItem('kozel_room',roomId); else localStorage.removeItem('kozel_room'); }, [roomId]);
+  useEffect(() => { if (resumeRoomId) localStorage.setItem('kozel_resume_room',resumeRoomId); else localStorage.removeItem('kozel_resume_room'); }, [resumeRoomId]);
   useEffect(() => {
     if (user) {
       localStorage.setItem('kozel_user', JSON.stringify(user));
@@ -195,10 +213,11 @@ export function App() {
   };
 
   const handleLogout = () => {
-    ['kozel_user','kozel_token','kozel_room'].forEach(key=>localStorage.removeItem(key));
+    ['kozel_user','kozel_token','kozel_room','kozel_resume_room'].forEach(key=>localStorage.removeItem(key));
     socket.disconnect(); socket.auth={};
     setUser(null);
     setRoomId(null);
+    setResumeRoomId(null);
     setView('menu');
     setDevConsoleOpen(false);
   };
@@ -225,10 +244,13 @@ export function App() {
     });
   };
 
-  // 🔽 МГНОВЕННЫЙ ВЫХОД И ОБНОВЛЕНИЕ СТАТИСТИКИ 🔽
+  // Сохраняем возможность вернуться только в незавершённую игру.
   const handleExitToLobby = (finalState?: any) => {
+    const resumable = roomId && !roomId.startsWith('DEV-') && finalState && !['waiting','finished'].includes(finalState.phase);
+    setResumeRoomId(resumable ? roomId : null);
     if (roomId) socket.emit('leave_room',roomId);
     setRoomId(null);
+    setView('menu');
 
     apiFetch(`${API_URL}/api/user/profile/${user.username}`)
       .then(res => res.ok ? res.json() : null)
@@ -245,16 +267,45 @@ export function App() {
       .catch(() => console.log('Фоновое обновление статистики не удалось'));
   };
 
+  const handleRematch = (opponent: string) => {
+    if (!socket.connected) { showToast('Нет соединения с сервером', 'error'); return; }
+    if (!opponent || opponent === user.username || opponent.includes('BOT')) { showToast('Реванш с этим игроком недоступен', 'error'); return; }
+    socket.timeout(5000).emit('create_room', '1v1', (err: any, result: { roomId?: string; error?: string }) => {
+      if (err || !result?.roomId) { showToast(result?.error || 'Не удалось создать комнату', 'error'); return; }
+      const newRoomId = result.roomId;
+      setResumeRoomId(null);
+      setRoomId(newRoomId);
+      socket.timeout(5000).emit('send_invite', { to: opponent, roomId: newRoomId }, (inviteErr: any, inviteResult: { error?: string }) => {
+        if (inviteErr || inviteResult?.error) showToast(inviteResult?.error || 'Комната создана, но приглашение не доставлено', 'error');
+        else showToast(`Приглашение отправлено: ${opponent}`, 'success');
+      });
+    });
+  };
+
+  const handleResume = () => {
+    if (!resumeRoomId) return;
+    if (!socket.connected) { showToast('Нет соединения с сервером', 'error'); return; }
+    socket.timeout(5000).emit('join_room', resumeRoomId, (error: any, response: any) => {
+      if (error || response?.error) {
+        setResumeRoomId(null);
+        showToast(response?.error || 'Партия больше недоступна', 'error');
+        return;
+      }
+      setRoomId(resumeRoomId);
+      setResumeRoomId(null);
+    });
+  };
+
   if (!user) return <Auth onAuth={handleAuth} />;
 
   let content;
   if (roomId) {
-    content = <Game key={roomId} socket={socket} roomId={roomId} setRoomId={setRoomId} username={user.username} isAdmin={isDev} openDevConsole={() => setDevConsoleOpen(true)} onExit={handleExitToLobby} />;
+    content = <Game key={roomId} socket={socket} roomId={roomId} setRoomId={setRoomId} username={user.username} isAdmin={isDev} openDevConsole={() => setDevConsoleOpen(true)} onExit={handleExitToLobby} onRematch={handleRematch} />;
   }
   else if (view === 'profile') content = <ProfileSettings user={user} onSave={updateProfile} onBack={() => setView('menu')} />;
   else if (view === 'friends') content = <Friends socket={socket} user={user} onRoom={setRoomId} onBack={() => setView('menu')} showToast={showToast} />;
   else if (view === 'lobby') content = <Lobby socket={socket} setRoomId={setRoomId} username={user.username} onBack={() => setView('menu')} />;
-  else content = <Menu socket={socket} user={user} onPlay={() => setView('lobby')} onProfile={() => setView('profile')} onFriends={() => setView('friends')} onLogout={handleLogout} />;
+  else content = <Menu socket={socket} user={user} onPlay={() => setView('lobby')} onProfile={() => setView('profile')} onFriends={() => setView('friends')} onLogout={handleLogout} onResume={handleResume} canResume={Boolean(resumeRoomId)} />;
 
   return (
     <>
@@ -312,6 +363,10 @@ export function App() {
 
         {content}
       </div>
+
+      {/* Only pre-game: unmounting stops audio before a match begins. */}
+      {!roomId && (view === 'menu' || view === 'lobby') && <RadioPlayer />}
+      {roomId && <VoiceChat key={roomId} socket={socket} roomId={roomId} />}
 
       {isDev && !roomId && (
         <>

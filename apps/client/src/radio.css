@@ -1,0 +1,28 @@
+.kozel-radio {
+  position: fixed; z-index: 9997;
+  left: max(12px, env(safe-area-inset-left, 0px));
+  bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  width: min(310px, calc(100vw - 24px));
+  color: #fff;
+  background: rgba(26, 26, 46, .96);
+  border: 1px solid #f0c674;
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.45);
+  font: 14px/1.35 Arial, sans-serif;
+  overflow: hidden;
+}
+.kozel-radio__bar { display:flex; align-items:center; gap:7px; padding:8px 10px; }
+.kozel-radio__label { flex:1; min-width:0; font-weight:bold; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; color:#f0c674; }
+.kozel-radio__button { min-width:38px; min-height:38px; border:1px solid #b99960; border-radius:8px; background:#30314b; color:#fff; cursor:pointer; font-size:19px; }
+.kozel-radio__button:focus-visible { outline:2px solid #f0c674; outline-offset:2px; }
+.kozel-radio__settings { padding:0 12px 12px; display:flex; flex-direction:column; gap:7px; }
+.kozel-radio__settings label { color:#d9d6d2; font-size:12px; }
+.kozel-radio__settings select { padding:9px 7px; border-radius:7px; background:#24253b; border:1px solid #a38c63; color:white; width:100%; }
+.kozel-radio__settings input { accent-color:#f0c674; width:100%; }
+.kozel-radio__error { font-size:12px; color:#ffb1b1; }
+.kozel-radio__hint { color:#aaa; font-size:11px; }
+@media (max-width: 820px) {
+  .kozel-radio { width: min(255px, calc(100vw - 20px)); left:10px; bottom: max(8px, env(safe-area-inset-bottom, 0px)); font-size:12px; }
+  .kozel-radio__bar { padding:5px 7px; }
+  .kozel-radio__button { min-width:36px; min-height:36px; }
+}

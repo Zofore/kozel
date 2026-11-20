@@ -8,3 +8,5 @@ export * from './apply';
 export * from './project';
 export * from './legalMoves';
 export * from './turn';
+
+export * from './bot';

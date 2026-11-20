@@ -346,7 +346,7 @@ const DiceRollScreen = ({ gameState }: { gameState: any }) => {
   );
 };
 
-export function Game({ socket, roomId, setRoomId, username, isAdmin = false, openDevConsole, onExit }: { socket: Socket, roomId: string, setRoomId: any, username: string, isAdmin?: boolean, openDevConsole?: () => void, onExit: (state?: any) => void }) {
+export function Game({ socket, roomId, setRoomId, username, isAdmin = false, openDevConsole, onExit, onRematch }: { socket: Socket, roomId: string, setRoomId: any, username: string, isAdmin?: boolean, openDevConsole?: () => void, onExit: (state?: any) => void, onRematch?: (opponent: string) => void }) {
   const [gameState, setGameState] = useState<any>(null);
   const [selectedCards, setSelectedCards] = useState<any[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -366,6 +366,7 @@ export function Game({ socket, roomId, setRoomId, username, isAdmin = false, ope
   const [matchConfetti, setMatchConfetti] = useState<any[]>([]);
   const [isReversed, setIsReversed] = useState(false);
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth <= 820);
+  const [confirmExit, setConfirmExit] = useState(false);
 
   const prevState = useRef<any>(null);
   const lastProcessedMsgId = useRef<string | null>(null);
@@ -537,6 +538,9 @@ export function Game({ socket, roomId, setRoomId, username, isAdmin = false, ope
             </div>
             <div style={{ fontSize: 12, color: '#666', marginTop: 15 }}>Тот, у кого меньше баллов, играет лучше! (Зеленый)</div>
           </div>
+          {isFinished && gameState.mode === '1v1' && onRematch && gameState.players.some((p: any) => p.name !== username && p.name !== 'Ожидание...' && !p.name.includes('BOT')) && (
+            <button onClick={() => { playSound('click'); const opponent = gameState.players.find((p: any) => p.name !== username)?.name; if (opponent) onRematch(opponent); }} style={{display:'block', width:'100%', marginBottom:12, padding:'14px 18px', background:'#4caf50', color:'white', fontWeight:'bold', border:0, borderRadius:8, cursor:'pointer', minHeight:48}}>🔄 Реванш — пригласить соперника</button>
+          )}
           {isFinished ? <button onClick={() => { playSound('click'); onExit(gameState); }} style={{ padding: '15px 40px', background: titleColor, border: 'none', borderRadius: 8, fontSize: 20, fontWeight: 'bold', cursor: 'pointer', color: titleColor === '#ffd700' ? '#000' : '#fff' }}>Выйти в лобби</button> : <button onClick={() => { playSound('click'); if(socket.connected) socket.emit('next_round', roomId, gameState.stateVersion); }} style={{ padding: '15px 40px', background: '#f0c674', border: 'none', borderRadius: 8, fontSize: 20, fontWeight: 'bold', cursor: 'pointer' }}>Следующий кон</button>}
         </div>
       </div>
@@ -687,17 +691,17 @@ export function Game({ socket, roomId, setRoomId, username, isAdmin = false, ope
               <div style={{ position: 'relative', width: '100px', height: '105px' }}>
                 {gameState.deckCount > 0 && (
                   <div className="carpet-card-back" style={{ 
-                    position: 'absolute', top: 0, left: 0, width: '70px', height: '105px', 
+                    position: 'absolute', top: 0, left: 15, width: '70px', height: '105px', 
                     boxShadow: '0 10px 15px rgba(0,0,0,0.6)' 
                   }} />
                 )}
                 {gameState.trumpCard && (
-                  <div style={{ position: 'absolute', top: 15, left: 30, transform: 'rotate(90deg) translateZ(0)', zIndex: 2, willChange: 'transform', pointerEvents: 'none' }}>
+                  <div style={{ position: 'absolute', top: 15, left: 45, transform: 'rotate(90deg) translateZ(0)', zIndex: 2, willChange: 'transform', pointerEvents: 'none' }}>
                     <CardView card={gameState.trumpCard} />
                   </div>
                 )}
               </div>
-              <div style={{ color: 'white', marginTop: '15px', background: 'rgba(0,0,0,0.6)', padding: '2px 10px', borderRadius: '10px' }}>В колоде: {gameState.deckCount}</div>
+              <div style={{ color: 'white', marginTop: '15px', alignSelf: 'center', textAlign: 'center', whiteSpace: 'nowrap', background: 'rgba(0,0,0,0.6)', padding: '2px 10px', borderRadius: '10px' }}>В колоде: {gameState.deckCount}</div>
             </div>
             <div style={{ justifySelf: 'end', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '10px', color: gameState.players[1]?.isAdmin ? undefined : '#ccc' }} className={gameState.players[1]?.isAdmin ? 'dev-nick' : ''}>
@@ -771,10 +775,22 @@ export function Game({ socket, roomId, setRoomId, username, isAdmin = false, ope
               <div style={{ color: '#aaa', alignSelf: 'center', fontSize: isMobile ? 12 : 14, textAlign: 'center', padding: '0 10px' }}>Выделите {passCount} карт{passCount > 1 ? (passCount < 5 ? 'ы' : '') : ''}</div>
             )}
 
-            <button onClick={() => { playSound('click'); onExit(gameState); }} style={{ padding: isMobile ? '12px 16px' : '10px 20px', background: 'transparent', color: '#aaa', border: '1px solid #555', borderRadius: '8px', cursor: 'pointer', fontSize: isMobile ? 14 : 16, minWidth: 48, minHeight: 48 }}>Выйти</button>
+            <button onClick={() => { playSound('click'); setConfirmExit(true); }} style={{ flexBasis: isMobile ? '100%' : 'auto', maxWidth: isMobile ? 180 : undefined, marginTop: isMobile ? 18 : 0, padding: isMobile ? '12px 16px' : '10px 20px', background: 'transparent', color: '#aaa', border: '1px solid #555', borderRadius: '8px', cursor: 'pointer', fontSize: isMobile ? 14 : 16, minWidth: 48, minHeight: 48 }}>Выйти</button>
           </div>
         </div>
       </div>
+      {confirmExit && (
+        <div role="presentation" style={{ position:'fixed', inset:0, zIndex:10010, background:'rgba(0,0,0,0.78)', display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="exit-title" style={{ background:'#22243e', border:'2px solid #f0c674', borderRadius:16, maxWidth:400, width:'100%', padding:24, textAlign:'center', color:'white' }}>
+            <h2 id="exit-title" style={{ color:'#f0c674', marginTop:0 }}>Ты чё, сливаешься?</h2>
+            <p>Ты лох и хочешь покинуть игру или ты норм пацан и продолжаем игру?</p>
+            <div style={{ display:'flex', gap:12, flexWrap:'wrap', justifyContent:'center', marginTop:22 }}>
+              <button onClick={() => { setConfirmExit(false); onExit(gameState); }} style={{ padding:'14px 18px', borderRadius:9, border:'1px solid #aaa', background:'#404052', color:'white', cursor:'pointer', minHeight:48 }}>😅 Да, выхожу</button>
+              <button autoFocus onClick={() => setConfirmExit(false)} style={{ padding:'14px 18px', borderRadius:9, border:'none', background:'#277447', color:'white', fontWeight:700, cursor:'pointer', minHeight:48 }}>😎 Я в игре!</button>
+            </div>
+          </div>
+        </div>
+      )}
     </LayoutGroup>
   );
 }

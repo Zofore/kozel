@@ -30,6 +30,18 @@ test('registration, profile, friends and idempotent match stats using PostgreSQL
     const match=randomUUID(), result=names.map((name,i)=>({name,won:i%2===0}));
     await Promise.all([db.settleMatch(match,result),db.settleMatch(match,result)]);
     for(let i=0;i<4;i++) {const u=await db.getUser(names[i]);assert.equal(u?.wins,i%2===0?1:0);assert.equal(u?.losses,i%2===0?0:1);}
+    for(let i=0;i<4;i++) {
+      const u=await db.getUser(names[i]);
+      assert.equal(u?.rating, i%2===0 ? 1020 : 985);
+      assert.equal(u?.xp, i%2===0 ? 100 : 35);
+    }
+    const board=await db.getLeaderboard(100);
+    assert(board.some(p=>p.username===names[0] && p.rating===1020));
+    const history = await db.getMatchHistory(names[0]);
+    const recorded = history.filter(h=>h.matchId===match);
+    assert.equal(recorded.length,1, 'duplicate settle must not duplicate history');
+    assert.equal(recorded[0].won,true);
+    assert(recorded[0].opponents.includes(names[1]));
     assert.equal(await db.friends(names[0],names[1],'remove'),null);
     assert(!(await db.getUser(names[0]))?.friends.includes(names[1]));
   } finally {await db.close();}

@@ -6,6 +6,31 @@ export function ProfileSettings({ user, onSave, onBack }: { user: any, onSave: (
   const [status, setStatus] = useState(user.status || 'В сети');
   const [avatar, setAvatar] = useState(user.avatar || '');
 
+  const [imageError, setImageError] = useState('');
+  const [processing, setProcessing] = useState(false);
+  const onAvatarFile = async (file?: File) => {
+    if (!file) return;
+    if (!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size > 8 * 1024 * 1024) {
+      setImageError('Выбери JPG, PNG или WebP размером до 8 МБ'); return;
+    }
+    setProcessing(true); setImageError('');
+    let url = '';
+    try {
+      url = URL.createObjectURL(file);
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      const canvas = document.createElement('canvas'); canvas.width=256; canvas.height=256;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Не удалось обработать изображение');
+      const crop = Math.min(img.naturalWidth,img.naturalHeight);
+      ctx.drawImage(img,(img.naturalWidth-crop)/2,(img.naturalHeight-crop)/2,crop,crop,0,0,256,256);
+      const encoded = canvas.toDataURL('image/jpeg',0.72);
+      if (encoded.length > 180000) throw new Error('Фото слишком большое');
+      setAvatar(encoded);
+    } catch(e:any) { setImageError(e?.message || 'Ошибка загрузки фото'); }
+    finally { if(url) URL.revokeObjectURL(url); setProcessing(false); }
+  };
   const defaultAvatar = `https://api.dicebear.com/7.x/adventurer/svg?seed=${user.username}`;
 
   return (
@@ -18,6 +43,11 @@ export function ProfileSettings({ user, onSave, onBack }: { user: any, onSave: (
           <img src={avatar || defaultAvatar} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         </div>
 
+        <label style={{ display:'block', marginBottom:12, padding:12, border:'1px solid #f0c674', borderRadius:8, color:'#f0c674', cursor:'pointer', fontWeight:700 }}>
+          📷 {processing ? 'Обрабатываем фото…' : 'Выбрать аватар из галереи'}
+          <input type="file" accept="image/jpeg,image/png,image/webp" disabled={processing} onChange={e => { void onAvatarFile(e.target.files?.[0]); e.target.value=''; }} style={{ display:'none' }}/>
+        </label>
+        {imageError && <p role="alert" style={{ color:'#ff8b8b', fontSize:13 }}>{imageError}</p>}
         <div style={{ marginBottom: 15, textAlign: 'left' }}>
           <label style={{ display: 'block', fontSize: 14, color: '#aaa', marginBottom: 5 }}>Ссылка на аватар (URL)</label>
           <input 
@@ -40,7 +70,7 @@ export function ProfileSettings({ user, onSave, onBack }: { user: any, onSave: (
           />
         </div>
 
-        <button onClick={() => onSave(status, avatar)} style={{ padding: '15px', width: '100%', background: '#4caf50', color: 'white', border: 'none', borderRadius: 8, fontSize: 16, fontWeight: 'bold', cursor: 'pointer', marginBottom: 10, boxShadow: '0 4px 0 #2e7d32' }}>Сохранить</button>
+        <button disabled={processing} onClick={() => onSave(status, avatar)} style={{ padding: '15px', width: '100%', background: '#4caf50', color: 'white', border: 'none', borderRadius: 8, fontSize: 16, fontWeight: 'bold', cursor: 'pointer', marginBottom: 10, boxShadow: '0 4px 0 #2e7d32' }}>Сохранить</button>
         <button onClick={onBack} style={{ padding: '15px', width: '100%', background: 'transparent', color: '#aaa', border: '1px solid #555', borderRadius: 8, fontSize: 16, cursor: 'pointer' }}>Назад</button>
       </div>
     </div>

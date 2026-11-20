@@ -1,0 +1,10 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { chooseBotMove, chooseBotDiscard, automaticTurn, applyTurn, normalizeBotDifficulty } = require('../dist');
+const c = (rank,suit='♠') => ({rank,suit});
+function fixture(){return {mode:'1v1',players:[{id:0,side:'A',name:'bot',hand:[c('A','♥'),c('7'),c('6'),c('10')]},{id:1,side:'B',name:'human',hand:[c('9'),c('J')]}],deck:[],trump:'♥',trumpCard:null,trumpChanged:false,trumpChangeEvent:null,currentPlayer:0,trick:null,lastTrickWinner:null,phase:'playing',matchScore:{A:0,B:0},multiplier:1,roundNumber:0,bita:{A:[],B:[]},lastRoundPoints:null,diceRolls:null,stateVersion:0,turnDeadline:null};}
+test('difficulty fallback and all named levels',()=>{for(const s of ['novice','amateur','professional','master','legend'])assert.equal(normalizeBotDifficulty(s),s);assert.equal(normalizeBotDifficulty('unsafe'),'professional');});
+test('strong bots retain trump and points on simple attack',()=>{for (const level of ['amateur','professional','master','legend']) {const s=fixture();const before=JSON.stringify(s);const move=chooseBotMove(s,level);assert.deepEqual(move,[c('6')]);assert.equal(JSON.stringify(s),before);const outcome=automaticTurn(s,true,level);assert.equal(outcome.ok,true);}});
+test('strategic discard keeps ace trump and ten when possible',()=>{const s=fixture();s.trick={attacker:1,attackCards:[c('8','♣'),c('9','♣')],attackLength:2,topCards:[c('8','♣'),c('9','♣')],topPlayer:1,cardsOnTable:[c('8','♣'),c('9','♣')],respondent:0,required:2};for(const level of ['professional','master','legend'])assert.deepEqual(chooseBotDiscard(s,level).map(x=>x.rank).sort(),['6','7']);});
+test('bot behavior cannot be influenced by secret opponent hand',()=>{const s=fixture();const a=chooseBotMove(s,'legend');s.players[1].hand=[c('A','♦'),c('K','♣')];assert.deepEqual(chooseBotMove(s,'legend'),a);});
+test('every difficulty produces a legal turn',()=>{for (const level of ['novice','amateur','professional','master','legend']) {const s=fixture();const res=automaticTurn(s,true,level);assert.equal(res.ok,true,level);}});
