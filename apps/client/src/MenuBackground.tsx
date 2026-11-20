@@ -408,19 +408,32 @@ export function MenuBackground() {
           .fly-right { animation: throwRight linear infinite; }
           .fly-left { animation: throwLeft linear infinite; }
 
+          /* Background music is independent from the radio dock: no overlap. */
           .music-btn {
             position: fixed;
-            bottom: 20px; left: 20px;
-            background: rgba(37, 37, 64, 0.8);
+            left: calc(max(12px, env(safe-area-inset-left, 0px)) + 310px + 14px);
+            bottom: max(12px, env(safe-area-inset-bottom, 0px));
+            background: rgba(37, 37, 64, 0.96);
             border: 2px solid #f0c674;
             color: #f0c674;
-            width: 50px; height: 50px;
-            border-radius: 50%;
+            width: 48px; height: 48px;
+            border-radius: 14px;
             display: flex; align-items: center; justify-content: center;
-            font-size: 24px; cursor: pointer; z-index: 9999;
-            backdrop-filter: blur(5px); transition: 0.2s;
+            font-size: 23px; cursor: pointer; z-index: 9999;
+            backdrop-filter: blur(5px); transition: background 0.2s, color 0.2s;
           }
-          .music-btn:hover { transform: scale(1.1); background: #f0c674; color: #000; }
+          .music-btn:hover { background: #f0c674; color: #000; }
+          .music-btn:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+          /* On compact screens keep the background-music control away from
+             the radio even when the radio settings panel is expanded. */
+          @media (max-width: 820px) {
+            .music-btn {
+              left: max(10px, env(safe-area-inset-left, 0px));
+              top: max(10px, env(safe-area-inset-top, 0px));
+              bottom: auto;
+              width: 44px; height: 44px;
+            }
+          }
 
           .center-shadow {
             position: absolute; inset: 0;
@@ -451,7 +464,7 @@ export function MenuBackground() {
         <div className="center-shadow" />
       </div>
 
-      <button className="music-btn" onClick={toggleMusic} title="Включить/Выключить музыку">
+      <button className="music-btn" type="button" onClick={toggleMusic} title="Фоновая музыка (не радио)" aria-label={musicOn ? 'Выключить фоновую музыку' : 'Включить фоновую музыку'} aria-pressed={musicOn}>
         {musicOn ? '🔊' : '🔇'}
       </button>
     </>
