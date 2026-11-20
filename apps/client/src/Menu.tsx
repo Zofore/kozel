@@ -72,9 +72,24 @@ export function Menu({ socket, user, onPlay, onProfile, onFriends, onLogout, onR
   }, []);
 
   return (
-    <div className="mobile-screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: isMobile ? '100dvh' : '100vh', background: 'transparent', color: 'white', position: 'relative', padding: isMobile ? 'env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0)' : 0, boxSizing: 'border-box' }}>
+    <div className="mobile-screen kozel-main-menu" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', height: '100dvh', minHeight: '100dvh', maxHeight: '100dvh', overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', background: 'transparent', color: 'white', position: 'relative', padding: 'max(16px, env(safe-area-inset-top, 0px)) 16px max(28px, env(safe-area-inset-bottom, 0px))', boxSizing: 'border-box' }}>
       
-      <style>{devStyles}</style>
+      <style>{devStyles + `
+/* Only main menu scrolls, while the game screen keeps its original layout. */
+.mobile-screen.kozel-main-menu {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  height: 100dvh !important;
+  min-height: 100dvh !important;
+  max-height: 100dvh !important;
+  overscroll-behavior-y: contain;
+}
+.mobile-screen.kozel-main-menu > .kozel-main-menu-panel {
+  flex-shrink: 0;
+  margin-top: auto;
+  margin-bottom: auto;
+}
+`}</style>
 
       {historyOpen && <MatchHistory onClose={() => setHistoryOpen(false)} />}
       {leadersOpen && (
@@ -97,7 +112,7 @@ export function Menu({ socket, user, onPlay, onProfile, onFriends, onLogout, onR
       )}
       {adminOpen && <AdminPanel socket={socket} username={user.username} onClose={() => setAdminOpen(false)} />}
 
-      <div className="mobile-panel" style={{ background: 'rgba(37, 37, 64, 0.85)', backdropFilter: 'blur(10px)', padding: isMobile ? 'clamp(20px, 5vw, 30px)' : 40, borderRadius: 20, boxShadow: '0 10px 30px rgba(0,0,0,0.8), 0 0 20px rgba(240,198,116,0.2)', border: isDev ? '2px solid #ffd700' : '2px solid #f0c674', textAlign: 'center', width: '100%', maxWidth: isMobile ? 'calc(100vw - 32px)' : 320, boxSizing: 'border-box' }}>
+      <div className="mobile-panel kozel-main-menu-panel" style={{ background: 'rgba(37, 37, 64, 0.85)', backdropFilter: 'blur(10px)', padding: isMobile ? 'clamp(20px, 5vw, 30px)' : 40, borderRadius: 20, boxShadow: '0 10px 30px rgba(0,0,0,0.8), 0 0 20px rgba(240,198,116,0.2)', border: isDev ? '2px solid #ffd700' : '2px solid #f0c674', textAlign: 'center', width: '100%', maxWidth: isMobile ? 'calc(100vw - 32px)' : 320, boxSizing: 'border-box' }}>
 
         <div style={{ margin: isMobile ? '0 auto 10px' : '0 auto 15px', display: 'inline-block' }}>
           <div className={isDev ? 'dev-avatar-frame' : ''} style={{ display: 'inline-flex', padding: isDev ? undefined : 0 }}>
