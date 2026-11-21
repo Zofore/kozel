@@ -8,9 +8,12 @@ export function Lobby({ socket, setRoomId, username, onBack }: { socket: Socket,
   const [quickMode, setQuickMode] = useState<'1v1' | '2v2' | null>(null);
   const [quickUntil, setQuickUntil] = useState(0);
   const [now, setNow] = useState(Date.now());
-  const [quickOffer, setQuickOffer] = useState<'2v2' | 'bot' | null>(null);
+  const [quickOffer, setQuickOffer] = useState<'1v1' | '2v2' | 'bot' | null>(null);
   const [quickError, setQuickError] = useState('');
   const activeQuick = useRef(false);
+  const quickNextOffer = useRef<'1v1' | '2v2' | 'bot'>('2v2');
+  const quickRequestId = useRef(0);
+  const currentQuickMode = useRef<'1v1' | '2v2' | null>(null);
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth <= 820);
 
   useEffect(() => {
@@ -28,17 +31,21 @@ export function Lobby({ socket, setRoomId, username, onBack }: { socket: Socket,
     const matched = (result: {roomId?: string}) => {
       if (!result?.roomId) return;
       activeQuick.current = false;
+      currentQuickMode.current = null;
+      quickRequestId.current += 1;
       setQuickMode(null);
       setQuickOffer(null);
       setQuickError('');
       setRoomId(result.roomId);
     };
     const timedOut = (result: {mode?: string}) => {
-      if (!activeQuick.current) return;
-      setQuickOffer(prev => prev || (result?.mode === '1v1' ? '2v2' : 'bot'));
+      if (!activeQuick.current || result?.mode !== currentQuickMode.current) return;
+      setQuickOffer(prev => prev || quickNextOffer.current);
     };
     const disconnected = () => {
       activeQuick.current = false;
+      currentQuickMode.current = null;
+      quickRequestId.current += 1;
       setQuickMode(null);
       setQuickOffer(null);
       setQuickError('Соединение потеряно. Попробуйте начать поиск заново.');
@@ -52,11 +59,15 @@ export function Lobby({ socket, setRoomId, username, onBack }: { socket: Socket,
       socket.off('disconnect', disconnected);
       socket.emit('quick_cancel');
       activeQuick.current = false;
+      currentQuickMode.current = null;
+      quickRequestId.current += 1;
     };
   }, [socket, setRoomId]);
 
   const cancelQuick = () => {
     activeQuick.current = false;
+    currentQuickMode.current = null;
+    quickRequestId.current += 1;
     socket.emit('quick_cancel');
     setQuickMode(null);
     setQuickOffer(null);
@@ -64,15 +75,18 @@ export function Lobby({ socket, setRoomId, username, onBack }: { socket: Socket,
     setQuickUntil(0);
   };
 
-  const startQuick = (mode: '1v1' | '2v2') => {
+  const startQuick = (mode: '1v1' | '2v2', fallback: '1v1' | '2v2' | 'bot') => {
     if (!socket.connected) { setQuickError('Нет соединения с сервером'); return; }
     setQuickError('');
     setQuickOffer(null);
     activeQuick.current = true;
+    currentQuickMode.current = mode;
+    quickNextOffer.current = fallback;
+    const requestId = ++quickRequestId.current;
     setQuickMode(mode);
     setQuickUntil(Date.now() + 90000);
     socket.timeout(5000).emit('quick_join', mode, (err: Error | null, result?: {ok?: boolean;error?: string;deadline?: number}) => {
-      if (!activeQuick.current) return;
+      if (!activeQuick.current || requestId !== quickRequestId.current) return;
       if (err || result?.error || !result?.ok) {
         cancelQuick();
         setQuickError(result?.error || 'Сервер не ответил на запрос поиска');
@@ -82,7 +96,8 @@ export function Lobby({ socket, setRoomId, username, onBack }: { socket: Socket,
     });
   };
 
-  const switchQuickTo2v2 = () => startQuick('2v2');
+  const switchQuickTo2v2 = () => startQuick('2v2', 'bot');
+  const switchQuickTo1v1 = () => startQuick('1v1', 'bot');
 
   const startBotAfterQuick = () => {
     cancelQuick();
@@ -159,11 +174,21 @@ export function Lobby({ socket, setRoomId, username, onBack }: { socket: Socket,
           <div style={{border:'1px solid #f0c674',borderRadius:12,padding:16,marginBottom:18,background:'rgba(0,0,0,0.35)'}}>
             <h2 style={{color:'#f0c674',fontSize:22,margin:'0 0 10px'}}>Быстрая игра</h2>
             {!quickMode ? (
-              <button onClick={() => startQuick('1v1')} style={{width:'100%',minHeight:48,background:'#4caf50',color:'#fff',border:0,borderRadius:8,fontSize:18,fontWeight:'bold',cursor:'pointer'}}>Найти соперника 1×1</button>
+              <div style={{display:'grid',gap:10}}>
+                <button onClick={() => startQuick('1v1', '2v2')} style={{width:'100%',minHeight:48,background:'#4caf50',color:'#fff',border:0,borderRadius:8,fontSize:18,fontWeight:'bold',cursor:'pointer'}}>Найти соперника 1×1</button>
+                <button onClick={() => startQuick('2v2', '1v1')} style={{width:'100%',minHeight:48,background:'#4caf50',color:'#fff',border:0,borderRadius:8,fontSize:18,fontWeight:'bold',cursor:'pointer'}}>Найти игроков 2×2</button>
+              </div>
             ) : (
               <>
                 <p style={{color:'white',margin:'6px 0'}}>Ищем игроков {quickMode === '1v1' ? '1×1' : '2×2'}…</p>
                 <div role="timer" style={{fontSize:28,color:'#f0c674',fontWeight:'bold',margin:'6px 0'}}>{Math.max(0,Math.ceil((quickUntil-now)/1000))} сек.</div>
+                {quickOffer === '1v1' && (
+                  <div style={{margin:'12px 0',color:'white'}}>
+                    <p>Пока не удалось собрать команду 2×2. Попробуем найти соперника 1×1?</p>
+                    <button onClick={switchQuickTo1v1} style={{minHeight:48,width:'100%',marginBottom:8,border:0,borderRadius:8,background:'#f0c674',color:'#161626',fontWeight:'bold'}}>Да, искать 1×1</button>
+                    <button onClick={()=>setQuickOffer(null)} style={{minHeight:44,width:'100%',background:'#303048',color:'white',border:'1px solid #777',borderRadius:8}}>Нет, продолжить поиск 2×2</button>
+                  </div>
+                )}
                 {quickOffer === '2v2' && (
                   <div style={{margin:'12px 0',color:'white'}}>
                     <p>Соперник 1×1 пока не найден. Попробуем 2×2?</p>
@@ -173,9 +198,9 @@ export function Lobby({ socket, setRoomId, username, onBack }: { socket: Socket,
                 )}
                 {quickOffer === 'bot' && (
                   <div style={{margin:'12px 0',color:'white'}}>
-                    <p>Пока не удалось собрать команду 2×2. Сыграть с ботом 1×1?</p>
+                    <p>Реальные игроки пока не найдены. Сыграть с ботом 1×1?</p>
                     <button onClick={startBotAfterQuick} style={{minHeight:48,width:'100%',marginBottom:8,border:0,borderRadius:8,background:'#f0c674',color:'#161626',fontWeight:'bold'}}>Да, играть с ботом</button>
-                    <button onClick={()=>setQuickOffer(null)} style={{minHeight:44,width:'100%',background:'#303048',color:'white',border:'1px solid #777',borderRadius:8}}>Нет, продолжить поиск 2×2</button>
+                    <button onClick={()=>setQuickOffer(null)} style={{minHeight:44,width:'100%',background:'#303048',color:'white',border:'1px solid #777',borderRadius:8}}>Нет, продолжить поиск {quickMode === '1v1' ? '1×1' : '2×2'}</button>
                   </div>
                 )}
                 <button onClick={cancelQuick} style={{minHeight:44,width:'100%',marginTop:8,background:'#512525',border:'1px solid #d99',color:'white',borderRadius:8}}>Отменить поиск</button>
