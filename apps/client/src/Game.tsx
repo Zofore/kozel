@@ -241,6 +241,74 @@ const floatingEmojiStyle = `
 }
 `;
 
+// Decorative royal portraits for the visible faces only. Card identity still comes from game state.
+const CardFaceArt = memo(({ rank, suit, small }: { rank: string; suit: string; small?: boolean }) => {
+  const isRed = suit === '♥' || suit === '♦';
+  const ink = isRed ? '#bb222c' : '#202638';
+  const royal = isRed ? '#a8202b' : '#243b67';
+  const royalDark = isRed ? '#66131f' : '#152642';
+  const isCourt = rank === 'J' || rank === 'Q' || rank === 'K';
+  const mark = rank === 'J' ? 'В' : rank === 'Q' ? 'Д' : rank === 'K' ? 'К' : rank;
+  const side = {
+    position: 'absolute' as const, zIndex: 2, display: 'flex', flexDirection: 'column' as const,
+    alignItems: 'center' as const, fontFamily: 'Georgia, serif', fontWeight: 900,
+    fontSize: small ? 12 : 17, lineHeight: 0.85, color: ink, textShadow: '0 1px 0 #fff'
+  };
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, borderRadius: 'inherit', overflow: 'hidden',
+      background: 'linear-gradient(132deg, #ffffff 0%, #fffdf6 38%, #ede9df 100%)',
+      boxShadow: 'inset 1px 1px 2px #fff, inset -2px -3px 5px rgba(85,67,45,0.17)',
+      userSelect: 'none', pointerEvents: 'none'
+    }}>
+      <div style={{position:'absolute',inset:small?2:3,border:'1px solid rgba(147,123,91,0.22)',borderRadius:3}} />
+      <div style={{...side,top:small?3:5,left:small?3:5}}><span>{mark}</span><span style={{fontSize:small?11:15,marginTop:3}}>{suit}</span></div>
+      <div style={{...side,bottom:small?3:5,right:small?3:5,transform:'rotate(180deg)'}}><span>{mark}</span><span style={{fontSize:small?11:15,marginTop:3}}>{suit}</span></div>
+      {isCourt ? (
+        <svg viewBox="0 0 70 100" aria-hidden="true" style={{
+          position:'absolute',width:'81%',height:'79%',top:'10%',left:'10%',
+          filter:'drop-shadow(0 1px 1px rgba(45,30,15,.2))'
+        }}>
+          <rect x="10" y="5" width="50" height="90" rx="4" fill="#f9f1d8" stroke="#c69a51" strokeWidth="1" />
+          <path d="M10 9L58 91M58 9L10 91" stroke="#bba06b" strokeWidth="0.8" opacity=".28" />
+          <path d="M13 95 L13 68 Q19 50 35 49 Q52 50 57 68 L57 95Z" fill={royalDark} stroke="#b88832" strokeWidth="1.8" />
+          <path d="M15 91 L21 64 L31 56 L35 89 L39 56 L49 64 L55 91Z" fill={royal} stroke="#c69a51" strokeWidth="1" />
+          <path d="M24 61 L35 76 L46 61 M24 84 L35 74 L46 84" fill="none" stroke="#efc25d" strokeWidth="3" />
+          <path d="M17 91 L25 72 M53 91L45 72" stroke="#f2d588" strokeWidth="2" strokeDasharray="2 3" />
+          <path d="M24 53 Q20 41 24 29 Q27 18 35 17 Q43 18 46 29 Q50 42 45 53 Q38 62 35 63 Q32 62 24 53Z" fill="#503021" stroke="#321d16" strokeWidth="1" />
+          {rank === 'Q' && <path d="M22 36 Q12 47 20 66 L26 59 Q22 50 27 37 M48 36Q58 47 50 66L44 59Q48 50 43 37" fill="#55301d" stroke="#2b170f" strokeWidth="1" />}
+          <path d="M26 28 Q34 25 44 28 L44 49 Q41 57 35 58 Q29 57 26 49Z" fill="#f1c79c" stroke="#a66a47" strokeWidth="1.1" />
+          <path d="M26 30 Q29 21 35 22 Q42 21 45 30 L40 26 L34 30L29 26Z" fill="#68422d" />
+          <path d="M28 39 L33 39 M37 39 L42 39" stroke="#402719" strokeWidth="1.5" strokeLinecap="round" />
+          <path d="M34 39 L33 47 L37 47" stroke="#ba855e" strokeWidth="0.9" fill="none" />
+          <path d="M31 51 Q35 53 39 51" stroke="#884a40" strokeWidth="1.1" fill="none" />
+          {rank === 'K' && <>
+            <path d="M27 50 Q28 64 35 66 Q42 64 43 50 L39 56 L35 53 L31 56Z" fill="#704126" stroke="#382115" strokeWidth=".8" />
+            <path d="M29 49 Q32 47 35 49 Q38 47 41 49" stroke="#69351c" strokeWidth="2" fill="none" />
+          </>}
+          {rank !== 'J' ? <>
+            <path d="M23 28 L21 13L28 18L35 10L42 18L49 13L47 28Z" fill="#d5a339" stroke="#8d561c" strokeWidth="1.3" />
+            <path d="M23 22H47" stroke="#fff0a0" strokeWidth="2" />
+            <circle cx="28" cy="19" r="2" fill="#ba2c3a" /><circle cx="35" cy="16" r="2" fill="#2b5791" /><circle cx="42" cy="19" r="2" fill="#ba2c3a" />
+          </> : <>
+            <path d="M19 28 Q20 14 35 13 Q48 15 51 29L44 27 L38 19 L30 26Z" fill="#d4a83f" stroke="#875623" strokeWidth="1.1" />
+            <path d="M38 18 Q50 1 58 10 Q49 8 48 21" fill="#e8d7a2" stroke="#946d3a" strokeWidth="1" />
+          </>}
+          <path d="M28 60L35 67L42 60" stroke="#f5dc95" strokeWidth="3" fill="none" />
+          <circle cx="35" cy="79" r="3.5" fill="#e7bd54" stroke="#8c581d" strokeWidth="1"/>
+          <text x="35" y="92" textAnchor="middle" fontSize="12" fontFamily="Georgia,serif" fontWeight="bold" fill="#eed389">{suit}</text>
+        </svg>
+      ) : (
+        <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
+          <span style={{color:ink,fontSize:small?27:43,fontFamily:'Georgia,serif',
+            textShadow:'1px 2px 1px rgba(0,0,0,.10)'}}>{suit}</span>
+        </div>
+      )}
+      <div style={{position:'absolute',top:0,left:0,right:0,height:'35%',background:'linear-gradient(155deg,rgba(255,255,255,.65),rgba(255,255,255,0))',opacity:.7}} />
+    </div>
+  );
+});
+
 const CardView = memo(({ card, onClick, selected, small, faceDown, className, isDevCard, isLegal }: any) => {
   const isRed = card.suit === '♥' || card.suit === '♦';
 
@@ -259,21 +327,16 @@ const CardView = memo(({ card, onClick, selected, small, faceDown, className, is
   return (
     <div onClick={onClick} role={onClick ? "button" : undefined} tabIndex={onClick ? 0 : undefined} aria-label={onClick ? `${card.rank} ${card.suit}` : undefined} aria-pressed={onClick ? Boolean(selected) : undefined} onKeyDown={onClick ? e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined} className={`card-3d ${small ? "card-small" : "card-full"} ${className || ''} ${selected ? 'card-selected' : ''}`} style={{
       width: small ? '50px' : '70px', height: small ? '75px' : '105px', 
-      background: isDevCard ? 'none' : (faceDown ? 'transparent' : '#fff'), 
-      border: faceDown ? (isDevCard ? '2px solid #000' : 'none') : 'none',
+      background: isDevCard ? 'none' : (faceDown ? 'transparent' : '#f7f2e8'),
+      border: faceDown ? (isDevCard ? '2px solid #000' : 'none') : '1px solid #dad2c0',
+      borderRadius: 5,
       cursor: onClick ? 'pointer' : 'default', padding: 0, overflow: 'hidden', position: 'relative',
       transform: selected ? 'translateY(-15px)' : 'none', 
       boxShadow: selected ? '0 0 0 3px #f0c674, 0 15px 25px rgba(0,0,0,0.6)' : '0 2px 5px rgba(0,0,0,0.5)', transition: '0.1s',
       ...(faceDown && isDevCard ? devCardStyle : {}),
       ...(isLegal && !selected ? legalStyle : {})
     }}>
-      {!faceDown && (
-        <>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', fontSize: small ? '18px' : '26px', fontWeight: '900', color: isRed ? '#d32f2f' : '#222' }}>
-              <div>{card.rank}</div><div style={{ marginTop: '-5px' }}>{card.suit}</div>
-            </div>
-        </>
-      )}
+      {!faceDown && <CardFaceArt rank={String(card.rank)} suit={String(card.suit)} small={Boolean(small)} />}
       {faceDown && isDevCard && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#ffd700', fontSize: 24, fontWeight: 'bold' }}>DEV</div>}
       
       {isCarpet && (
