@@ -317,7 +317,18 @@ export function App() {
     <>
       <style>{toastStyles}</style>
       
-      <MenuBackground />
+      <div className={roomId ? "app-toolbar app-toolbar-in-game" : "app-toolbar"}>
+        <MenuBackground />
+        {/* Only pre-game: unmounting stops audio before a match begins. */}
+        {!roomId && (view === 'menu' || view === 'lobby') && <RadioPlayer />}
+
+        {isDev && !roomId && (
+          <>
+            <button className="dev-float-btn dev-float-bot" onClick={handleSpawnBot} title="🤖 Игра с ботом">🤖</button>
+            <button className="dev-float-btn dev-float-console" onClick={() => setDevConsoleOpen(true)} title="🛠️ Dev Console (` тильда)">🛠️</button>
+          </>
+        )}
+      </div>
 
       <div style={{ position: 'relative', zIndex: 1 }}>
         {inviteModal && (
@@ -369,16 +380,6 @@ export function App() {
 
         {content}
       </div>
-
-      {/* Only pre-game: unmounting stops audio before a match begins. */}
-      {!roomId && (view === 'menu' || view === 'lobby') && <RadioPlayer />}
-
-      {isDev && !roomId && (
-        <>
-          <button className="dev-float-btn dev-float-bot" onClick={handleSpawnBot} title="🤖 Игра с ботом">🤖</button>
-          <button className="dev-float-btn dev-float-console" onClick={() => setDevConsoleOpen(true)} title="🛠️ Dev Console (` тильда)">🛠️</button>
-        </>
-      )}
 
       {isDev && devConsoleOpen && (
         <DevConsole socket={socket} username={user.username} onClose={() => setDevConsoleOpen(false)} />

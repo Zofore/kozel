@@ -192,7 +192,7 @@ export function Friends({ socket, user, onRoom, onBack, showToast }: { socket: S
       {friends.length === 0 && <p style={{ color: '#aaa' }}>У тебя пока нет друзей. Найди кого-нибудь!</p>}
       
       {friends.map(f => (
-        <div key={f.username} className="mobile-friend-row" style={{ display: 'flex', alignItems: 'center', background: 'rgba(37, 37, 64, 0.9)', backdropFilter: 'blur(5px)', padding: 10, borderRadius: 8, marginBottom: 10 }}>
+        <div key={f.username} className="mobile-friend-row friend-card" style={{ display: 'flex', alignItems: 'center', background: 'rgba(37, 37, 64, 0.9)', backdropFilter: 'blur(5px)', padding: 10, borderRadius: 8, marginBottom: 10 }}>
           <div style={{ width: 45, height: 45, borderRadius: '50%', background: '#333', overflow: 'hidden', marginRight: 15, border: f.online ? '2px solid #4caf50' : '2px solid transparent' }}>
             {f.avatar ? <img src={f.avatar} style={{ width: '100%', height: '100%' }} /> : <div style={{ textAlign: 'center', lineHeight: '45px' }}>👤</div>}
           </div>
