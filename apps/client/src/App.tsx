@@ -8,7 +8,6 @@ import { ProfileSettings } from './ProfileSettings';
 import { Friends } from './Friends';
 import { MenuBackground } from './MenuBackground';
 import { RadioPlayer } from './RadioPlayer';
-import { VoiceChat } from './VoiceChat';
 import { DevConsole } from './DevConsole';
 
 import { API_URL, apiFetch, checkedJson } from './api';
@@ -373,7 +372,6 @@ export function App() {
 
       {/* Only pre-game: unmounting stops audio before a match begins. */}
       {!roomId && (view === 'menu' || view === 'lobby') && <RadioPlayer />}
-      {roomId && <VoiceChat key={roomId} socket={socket} roomId={roomId} />}
 
       {isDev && !roomId && (
         <>
