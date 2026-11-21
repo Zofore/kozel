@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
 import { Socket } from 'socket.io-client';
 import { motion, LayoutGroup } from 'framer-motion';
+import { Goat3D } from './Goat3D';
 
 const SUIT_MAP: any = { '♠': 'S', '♥': 'H', '♦': 'D', '♣': 'C' };
 const getAvatar = (name: string) => `https://api.dicebear.com/7.x/adventurer/svg?seed=${name || 'default'}`;
@@ -497,9 +498,10 @@ export function Game({ socket, roomId, setRoomId, username, isAdmin = false, ope
     let matchEmotion = '';
     let titleColor = '#f0c674';
 
+    const mySide = gameState.players[gameState.me]?.side;
+    const amIWinner = isFinished && ((scoreA >= 24 && mySide === 'B') || (scoreB >= 24 && mySide === 'A'));
+
     if (isFinished) {
-      const mySide = gameState.players[gameState.me]?.side;
-      const amIWinner = (gameState.matchScore.A >= 24 && mySide === 'B') || (gameState.matchScore.B >= 24 && mySide === 'A');
       
       const tauntsWin = ['🏆 АБСОЛЮТНЫЙ ЧЕМПИОН! 🏆', '👑 Ты разнес их в пух и прах!', '🔥 Король стола, не иначе!', '💰 Забирай всё, ты лучший!'];
       const tauntsLose = ['💀 СЛИВ ЗАЩИТАН, БРАТИШКА 💀', '🤡 Иди учись играть, козёл!', '📉 Твоя бабушка играет лучше', '🗑️ Мусорка с тобой не согласна'];
@@ -517,6 +519,7 @@ export function Game({ socket, roomId, setRoomId, username, isAdmin = false, ope
         {matchConfetti.map(e => <div key={e.id} className="gold-emoji" style={{ left: `${e.left}%`, animationDuration: `${e.duration}s`, fontSize: 40 }}>{e.emoji}</div>)}
 
         <div className="mobile-panel" style={{ padding: 40, textAlign: 'center', color: 'white', maxWidth: 600, background: 'rgba(20, 20, 35, 0.95)', backdropFilter: 'blur(10px)', borderRadius: 16, boxShadow: isFinished ? `0 10px 30px rgba(0,0,0,0.8), 0 0 40px ${titleColor}40` : '0 10px 30px rgba(0,0,0,0.5)', border: `2px solid ${titleColor}`, zIndex: 10 }}>
+          {amIWinner && <Goat3D celebrate />}
           <h1 style={{ color: titleColor, fontSize: isFinished ? 42 : 32, textShadow: `0 0 20px ${titleColor}80`, marginBottom: 10 }}>{matchTitle}</h1>
           {isFinished && <p style={{ color: '#ccc', fontSize: 18, marginBottom: 30 }}>{matchEmotion}</p>}
           
