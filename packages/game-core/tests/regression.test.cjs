@@ -18,3 +18,34 @@ test('trump changes on draw exactly once',()=>{let s=base();s.players[0].hand=cr
 test('score: zero points 6, 31 points 4, 32 points 2; eggs double',()=>{const d=createDeck();for(const [points,penalty] of [[0,6],[31,4],[32,2],[60,0]]){const s=base();let selected=[];function find(i,total){if(total===points)return true;if(i===d.length||total>points)return false;selected.push(d[i]);if(find(i+1,total+calculatePoints([d[i]])))return true;selected.pop();return find(i+1,total);}assert(find(0,0));s.bita.B=selected;s.bita.A=d.filter(x=>!selected.includes(x));const r=ok(applyEvent(s,{type:'SCORE_ROUND'}));assert.equal(r.matchScore.B,penalty);if(points===60)assert.equal(r.multiplier,2);}});
 test('private projection does not expose opponent hand or deck',()=>{const s=fixture();const view=project(s,0,getLegalMoves(s,0));assert.equal(view.players[1].hand,undefined);assert.equal(view.deck,undefined);assert.deepEqual(view.hand,s.players[0].hand);});
 test('complete seeded rounds with automatic actions, card conservation 1v1/2v2',()=>{for(const mode of ['1v1','2v2'])for(let seed=0;seed<100;seed++){let s=ok(applyEvent(base(mode),{type:'START_ROUND',firstPlayer:0,seed}));let steps=0;while(s.deck.length||s.trick||s.players.some(p=>p.hand.length)){assert(++steps<300,`${mode} seed ${seed} stuck`);s=ok(automaticTurn(s,steps%3===0));const all=[...s.deck,...s.players.flatMap(p=>p.hand),...s.bita.A,...s.bita.B,...(s.trick?.cardsOnTable||[])];assert.equal(all.length,36);assert.equal(new Set(all.map(x=>x.rank+x.suit)).size,36);}assert.equal(calculatePoints([...s.bita.A,...s.bita.B]),120);}});
+
+test('1v1: after a successful beat, a pass cannot spend a second set of cards', () => {
+  let state = fixture();
+  state = ok(attack(state, [c('6'), c('7')]));
+  state = ok(applyTurn(state, { type: 'BEAT', player: 1, cards: [c('K'), c('A')] }));
+  assert.equal(applyTurn(state, { type: 'PASS', player: 0, cards: state.players[0].hand.slice(0, 2) }).ok, false);
+  const manual = ok(applyTurn(state, { type: 'PASS', player: 0, cards: [] }));
+  const auto = ok(automaticTurn(state));
+  assert.equal(auto.deck.length, 2);
+  assert.deepEqual(auto.players, manual.players);
+  assert.deepEqual(ok(automaticTurn(state, false, 'professional')).players, manual.players);
+  assert.equal(auto.bita.B.length, 4);
+});
+
+test('1v1 bot vs timeout keeps hands in sync after each completed trick', () => {
+  for (const difficulty of ['novice', 'amateur', 'professional', 'master', 'legend']) {
+    for (let seed = 0; seed < 100; seed++) {
+      let state = ok(applyEvent(base(), { type: 'START_ROUND', firstPlayer: seed % 2, seed }));
+      for (let steps = 0; state.deck.length || state.trick || state.players.some(p => p.hand.length); steps++) {
+        assert(steps < 100, `stalled: ${difficulty}, seed ${seed}`);
+        state = ok(state.currentPlayer === 1
+          ? automaticTurn(state, true, difficulty) : automaticTurn(state));
+        if (state.trick) continue;
+        assert.equal(state.deck.length % 2, 0);
+        assert.equal(state.players[0].hand.length, state.players[1].hand.length);
+      }
+      assert.equal(state.bita.A.length + state.bita.B.length, 36);
+      assert.equal(calculatePoints([...state.bita.A, ...state.bita.B]), 120);
+    }
+  }
+});
