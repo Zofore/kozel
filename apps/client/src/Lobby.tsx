@@ -1,10 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Socket } from 'socket.io-client';
 
 export function Lobby({ socket, setRoomId, username, onBack }: { socket: Socket, setRoomId: (id: string) => void, username: string, onBack: () => void }) {
   const [difficulty, setDifficulty] = useState('professional');
   const [creatingBotRoom, setCreatingBotRoom] = useState(false);
   const [joinId, setJoinId] = useState('');
+  const [quickMode, setQuickMode] = useState<'1v1' | '2v2' | null>(null);
+  const [quickUntil, setQuickUntil] = useState(0);
+  const [now, setNow] = useState(Date.now());
+  const [quickOffer, setQuickOffer] = useState<'2v2' | 'bot' | null>(null);
+  const [quickError, setQuickError] = useState('');
+  const activeQuick = useRef(false);
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth <= 820);
 
   useEffect(() => {
@@ -13,13 +19,87 @@ export function Lobby({ socket, setRoomId, username, onBack }: { socket: Socket,
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  useEffect(() => {
+    const tick = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(tick);
+  }, []);
+
+  useEffect(() => {
+    const matched = (result: {roomId?: string}) => {
+      if (!result?.roomId) return;
+      activeQuick.current = false;
+      setQuickMode(null);
+      setQuickOffer(null);
+      setQuickError('');
+      setRoomId(result.roomId);
+    };
+    const timedOut = (result: {mode?: string}) => {
+      if (!activeQuick.current) return;
+      setQuickOffer(prev => prev || (result?.mode === '1v1' ? '2v2' : 'bot'));
+    };
+    const disconnected = () => {
+      activeQuick.current = false;
+      setQuickMode(null);
+      setQuickOffer(null);
+      setQuickError('Соединение потеряно. Попробуйте начать поиск заново.');
+    };
+    socket.on('quick_matched', matched);
+    socket.on('quick_timeout', timedOut);
+    socket.on('disconnect', disconnected);
+    return () => {
+      socket.off('quick_matched', matched);
+      socket.off('quick_timeout', timedOut);
+      socket.off('disconnect', disconnected);
+      socket.emit('quick_cancel');
+      activeQuick.current = false;
+    };
+  }, [socket, setRoomId]);
+
+  const cancelQuick = () => {
+    activeQuick.current = false;
+    socket.emit('quick_cancel');
+    setQuickMode(null);
+    setQuickOffer(null);
+    setQuickError('');
+    setQuickUntil(0);
+  };
+
+  const startQuick = (mode: '1v1' | '2v2') => {
+    if (!socket.connected) { setQuickError('Нет соединения с сервером'); return; }
+    setQuickError('');
+    setQuickOffer(null);
+    activeQuick.current = true;
+    setQuickMode(mode);
+    setQuickUntil(Date.now() + 90000);
+    socket.timeout(5000).emit('quick_join', mode, (err: Error | null, result?: {ok?: boolean;error?: string;deadline?: number}) => {
+      if (!activeQuick.current) return;
+      if (err || result?.error || !result?.ok) {
+        cancelQuick();
+        setQuickError(result?.error || 'Сервер не ответил на запрос поиска');
+        return;
+      }
+      if (result.deadline) setQuickUntil(result.deadline);
+    });
+  };
+
+  const switchQuickTo2v2 = () => startQuick('2v2');
+
+  const startBotAfterQuick = () => {
+    cancelQuick();
+    createBotRoom();
+  };
+
+  const leaveLobby = () => { cancelQuick(); onBack(); };
+
   const createRoom = (mode: '1v1' | '2v2') => {
+    cancelQuick();
     socket.timeout(5000).emit('create_room', mode, (err:any,res: { roomId?: string; error?: string }) => {
       if (!err && res?.roomId) setRoomId(res.roomId); else alert(res?.error || 'Ошибка комнаты');
     });
   };
 
   const createBotRoom = () => {
+    cancelQuick();
     setCreatingBotRoom(true);
     socket.timeout(5000).emit('create_bot_room', difficulty, (err: Error | null, res?: { roomId?: string; error?: string }) => {
       setCreatingBotRoom(false);
@@ -29,6 +109,7 @@ export function Lobby({ socket, setRoomId, username, onBack }: { socket: Socket,
   };
 
   const joinRoom = () => {
+    cancelQuick();
     if (!joinId.trim()) return alert('Введите ID комнаты!');
     socket.timeout(5000).emit('join_room',joinId.trim(),(err:any,res:any)=>{
       if(err || res?.error) alert(res?.error || 'Сервер недоступен'); else setRoomId(res.roomId);
@@ -43,7 +124,7 @@ export function Lobby({ socket, setRoomId, username, onBack }: { socket: Socket,
 
         {/* КНОПКА НАЗАД */}
         <button
-          onClick={onBack}
+          onClick={leaveLobby}
           style={{
             marginBottom: 20,
             background: 'rgba(37, 37, 64, 0.8)',
@@ -73,6 +154,35 @@ export function Lobby({ socket, setRoomId, username, onBack }: { socket: Socket,
         <div className="mobile-panel" style={{ width: '100%', background: 'rgba(37, 37, 64, 0.85)', backdropFilter: 'blur(10px)', padding: isMobile ? 'clamp(20px, 5vw, 30px)' : 30, borderRadius: 20, border: '2px solid #f0c674', boxShadow: '0 10px 30px rgba(0,0,0,0.8)', textAlign: 'center', boxSizing: 'border-box' }}>
           <h1 style={{ color: '#f0c674', fontSize: isMobile ? 28 : 36, marginBottom: 10, marginTop: 0 }}>Лобби</h1>
           <p style={{ color: 'white', marginBottom: isMobile ? 20 : 30, fontSize: isMobile ? 15 : undefined }}>Вы вошли как: <strong>{username}</strong></p>
+
+
+          <div style={{border:'1px solid #f0c674',borderRadius:12,padding:16,marginBottom:18,background:'rgba(0,0,0,0.35)'}}>
+            <h2 style={{color:'#f0c674',fontSize:22,margin:'0 0 10px'}}>Быстрая игра</h2>
+            {!quickMode ? (
+              <button onClick={() => startQuick('1v1')} style={{width:'100%',minHeight:48,background:'#4caf50',color:'#fff',border:0,borderRadius:8,fontSize:18,fontWeight:'bold',cursor:'pointer'}}>Найти соперника 1×1</button>
+            ) : (
+              <>
+                <p style={{color:'white',margin:'6px 0'}}>Ищем игроков {quickMode === '1v1' ? '1×1' : '2×2'}…</p>
+                <div role="timer" style={{fontSize:28,color:'#f0c674',fontWeight:'bold',margin:'6px 0'}}>{Math.max(0,Math.ceil((quickUntil-now)/1000))} сек.</div>
+                {quickOffer === '2v2' && (
+                  <div style={{margin:'12px 0',color:'white'}}>
+                    <p>Соперник 1×1 пока не найден. Попробуем 2×2?</p>
+                    <button onClick={switchQuickTo2v2} style={{minHeight:48,width:'100%',marginBottom:8,border:0,borderRadius:8,background:'#f0c674',color:'#161626',fontWeight:'bold'}}>Да, искать 2×2</button>
+                    <button onClick={()=>setQuickOffer(null)} style={{minHeight:44,width:'100%',background:'#303048',color:'white',border:'1px solid #777',borderRadius:8}}>Нет, продолжить поиск 1×1</button>
+                  </div>
+                )}
+                {quickOffer === 'bot' && (
+                  <div style={{margin:'12px 0',color:'white'}}>
+                    <p>Пока не удалось собрать команду 2×2. Сыграть с ботом 1×1?</p>
+                    <button onClick={startBotAfterQuick} style={{minHeight:48,width:'100%',marginBottom:8,border:0,borderRadius:8,background:'#f0c674',color:'#161626',fontWeight:'bold'}}>Да, играть с ботом</button>
+                    <button onClick={()=>setQuickOffer(null)} style={{minHeight:44,width:'100%',background:'#303048',color:'white',border:'1px solid #777',borderRadius:8}}>Нет, продолжить поиск 2×2</button>
+                  </div>
+                )}
+                <button onClick={cancelQuick} style={{minHeight:44,width:'100%',marginTop:8,background:'#512525',border:'1px solid #d99',color:'white',borderRadius:8}}>Отменить поиск</button>
+              </>
+            )}
+            {quickError && <p role="alert" style={{color:'#ff9999'}}>{quickError}</p>}
+          </div>
 
           <div style={{ marginBottom: 16 }}>
             <button onClick={() => createRoom('1v1')} style={{ padding: isMobile ? '14px 20px' : '15px 20px', margin: isMobile ? '4px 0' : '5px 0', width: '100%', background: '#f0c674', border: 'none', borderRadius: 8, fontSize: isMobile ? 17 : 18, fontWeight: 'bold', cursor: 'pointer', color: '#000', minHeight: 48 }}>Создать 1 на 1</button>

@@ -311,6 +311,8 @@ async function main() {
     if (idx < 0) { if(notify) socket.emit('kicked','Комната заполнена или игра уже началась'); return false; }
     const otherRoom = findRoomOfSocket(socket.id);
     if (otherRoom && otherRoom !== roomId) detach(socket,otherRoom,true);
+    // A private invitation takes precedence over automatic matchmaking.
+    quickCancel(socket.id);
     const newSeat=room.players[idx].name !== name;
     const oldSocket = seats[idx];
     if (oldSocket && oldSocket !== socket.id) { io.to(oldSocket).emit('kicked','Вход выполнен с другого подключения'); io.sockets.sockets.get(oldSocket)?.leave(roomId); }
@@ -322,6 +324,46 @@ async function main() {
     else broadcastState(io,roomId,room);
     return true;
   }
+
+  // Server-authoritative quick matchmaking. The queue is separate from private rooms.
+  type QuickMode = '1v1' | '2v2';
+  type QuickEntry = { socketId: string; mode: QuickMode; timeout: NodeJS.Timeout };
+  const quickQueue = new Map<string, QuickEntry>();
+  const quickCancel = (socketId: string) => {
+    const entry = quickQueue.get(socketId);
+    if (entry) clearTimeout(entry.timeout);
+    quickQueue.delete(socketId);
+  };
+  const quickMatch = (mode: QuickMode) => {
+    const needed = mode === '1v1' ? 2 : 4;
+    const waiting = Array.from(quickQueue.values())
+      .filter(entry => entry.mode === mode && io.sockets.sockets.has(entry.socketId) && !findRoomOfSocket(entry.socketId))
+      .slice(0, needed);
+    if (waiting.length !== needed) return;
+    const peers = waiting.map(entry => io.sockets.sockets.get(entry.socketId)!);
+    for (const entry of waiting) quickCancel(entry.socketId);
+    const roomId = randomUUID();
+    const initialState: GameState = {
+      mode,
+      players: peers.map((peer,i) => ({
+        id: i as PlayerId, side: i % 2 ? 'B' as const : 'A' as const,
+        hand: [], name: peer.data.user.username as string, connected: true,
+        isAdmin: isAdminId(peer.data.user.id)
+      })),
+      deck: [], trumpCard: null, trump: null, trumpChanged: false, trumpChangeEvent: null,
+      currentPlayer: 0, trick: null, lastTrickWinner: null, phase: 'waiting',
+      matchScore: { A: 0, B: 0 }, multiplier: 1, roundNumber: 0,
+      bita: { A: [], B: [] }, lastRoundPoints: null, diceRolls: null,
+      stateVersion: 0, turnDeadline: null, settled: false
+    };
+    rooms.set(roomId, initialState);
+    playersInRoom.set(roomId, peers.map(peer => peer.id));
+    roomActivity.set(roomId, Date.now());
+    for (const peer of peers) peer.join(roomId);
+    for (const peer of peers) peer.emit('quick_matched', { roomId, mode });
+    rollDiceForRoom(io, roomId);
+  };
+
   const maintenance = setInterval(()=>{
     const now = Date.now();
     for (const [k,v] of attempts) if (v.expires <= now) attempts.delete(k);
@@ -413,7 +455,7 @@ async function main() {
       if (fromIndex < 0) return;
       io.to(target).emit('voice_signal',{fromIndex,signal});
     });
-    socket.on('disconnect', () => { leaveVoice(socket.id);
+    socket.on('disconnect', () => { quickCancel(socket.id); leaveVoice(socket.id);
       if (onlineUsers.get(myName) === socket.id) { onlineUsers.delete(myName); socket.broadcast.emit('user_status_change',{username:myName,online:false}); }
       const id = findRoomOfSocket(socket.id); if (id) detach(socket,id);
     });
@@ -432,9 +474,30 @@ async function main() {
       invitations.delete(key); const sender=onlineUsers.get(invite.from);
       if(sender) io.to(sender).emit('invite_accepted',{roomId}); if(typeof callback==='function') callback({roomId});
     });
+
+    socket.on('quick_join', (mode: QuickMode, callback?: (result: any) => void) => {
+      const respond = (result: any) => { if (typeof callback === 'function') callback(result); };
+      if (mode !== '1v1' && mode !== '2v2') return respond({error:'Неверный режим'});
+      if (findRoomOfSocket(socket.id)) return respond({error:'Сначала выйдите из комнаты'});
+      quickCancel(socket.id);
+      const timeout = setTimeout(() => {
+        const current = quickQueue.get(socket.id);
+        if (current?.mode === mode && current.timeout === timeout) {
+          socket.emit('quick_timeout', {mode});
+        }
+      },90_000);
+      quickQueue.set(socket.id, {socketId:socket.id,mode,timeout});
+      respond({ok:true,mode,deadline:Date.now()+90_000});
+      quickMatch(mode);
+    });
+    socket.on('quick_cancel', (callback?: (result: any) => void) => {
+      quickCancel(socket.id);
+      if (typeof callback === 'function') callback({ok:true});
+    });
     socket.on('create_room', (mode: '1v1' | '2v2', dataOrCallback: any, maybeCallback?: any) => {
       const callback = typeof dataOrCallback === 'function' ? dataOrCallback : maybeCallback;
       if (!['1v1','2v2'].includes(mode)) { if(typeof callback==='function') callback({error:'Неверный режим'}); return; }
+      quickCancel(socket.id);
       const previous = findRoomOfSocket(socket.id); if(previous) detach(socket,previous,true);
       const roomId = randomUUID();
       const initialState: GameState = {
@@ -454,6 +517,7 @@ async function main() {
         return;
       }
 
+      quickCancel(socket.id);
       const previous = findRoomOfSocket(socket.id);
       if (previous) detach(socket, previous, true);
       const roomId = createBotRoom(socket, difficulty, 'BOT-');
@@ -462,11 +526,13 @@ async function main() {
     });
     socket.on('create_dev_room', (callback: any) => {
       if (!isAdmin) { if(typeof callback==='function') callback({error:'Доступ запрещён'}); return; }
+      quickCancel(socket.id);
       const previous=findRoomOfSocket(socket.id); if(previous) detach(socket,previous,true);
       const id=createBotRoom(socket, normalizeBotDifficulty(process.env.BOT_DIFFICULTY), 'DEV-'); if(typeof callback==='function') callback({roomId:id}); rollDiceForRoom(io,id);
     });
     socket.on('join_room', (roomId: string, legacyOrCallback?: any, callback?: any) => {
       const ack = typeof legacyOrCallback === 'function' ? legacyOrCallback : callback;
+      quickCancel(socket.id);
       const ok = typeof roomId === 'string' && join(socket,roomId,typeof ack!=='function');
       if(typeof ack==='function') ack(ok ? {roomId} : {error:'Не удалось войти в комнату'});
     });
