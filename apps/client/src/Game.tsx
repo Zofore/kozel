@@ -784,13 +784,14 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
 
   return (
     <LayoutGroup>
-      <div className="mobile-game premium-game" onClick={unlockGameAudio} style={{
+      <div className={editorOpen ? "mobile-game premium-game premium-editing" : "mobile-game premium-game"} onClick={unlockGameAudio} style={{
+        ...({"--visual-felt":activeVisual.felt,"--visual-edge":activeVisual.edge,"--visual-scale":activeVisual.cardScale / 100} as React.CSSProperties),
         display: 'flex', flexDirection: 'column', height: '100vh',
         background: '#101b32', position: 'relative', overflow: 'hidden',
         transform: isReversed ? 'rotate(180deg)' : 'none',
         transition: 'transform 0.6s ease-in-out',
       }}>
-        <div className="premium-voice-slot">{voiceChat}</div>
+        <div className="premium-voice-slot" style={{...({"--visual-voice-x":String(activeVisual.positions.voice.x*(isMobile?4:8))+"px","--visual-voice-y":String(activeVisual.positions.voice.y*(isMobile?4:8))+"px"} as React.CSSProperties)}}>{voiceChat}</div>
         <style>{floatingEmojiStyle}</style>
         {floatingEmojis.map(e => <div key={e.id} className="floating-emoji" style={{ left: `${e.left}%`, fontSize: isMobile ? 40 : 60 }}>{e.emoji}</div>)}
         {rainEmojis.map(e => <div key={e.id} className="rain-emoji" style={{ left: `${e.left}%`, animationDuration: `${e.duration}s`, fontSize: isMobile ? 30 : 50 }}>{e.emoji}</div>)}
@@ -864,6 +865,7 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
               <span className={timeLeft <= 5 ? 'premium-timer premium-timer--warning' : 'premium-timer'}>⏱ {timeLeft} с</span>
             </div>
             <div className="premium-topbar-actions">
+              {isDev && <button type="button" className="premium-icon-button" onClick={() => {setEditorMode(isMobile?"mobile":"desktop");setEditorOpen(v=>!v);setVisualStatus("");}} title="Конструктор стола" aria-label="Конструктор стола">🎨</button>}
               {isDev && openDevConsole && <button type="button" className="premium-icon-button" onClick={openDevConsole} title="Dev Console">🛠</button>}
               <button type="button" className="premium-icon-button" onClick={() => setPremiumSettingsOpen(v => !v)} title="Настройки стола" aria-label="Настройки стола" aria-expanded={premiumSettingsOpen}>⚙</button>
             </div>
@@ -877,7 +879,7 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
             </div>
           )}
           <main className="premium-felt">
-            <div className={'premium-other-players premium-other-players--' + gameState.mode}>
+            <div className={'premium-other-players premium-other-players--' + gameState.mode + (editorOpen ? ' premium-edit-target' : '')} style={positionStyle('opponents')} {...dragHandlers('opponents')}>
               {gameState.players.filter((p: any) => p.id !== gameState.me).map((p: any) => (
                 <div className={'premium-seat' + (p.side === gameState.players[gameState.me]?.side ? ' premium-seat--teammate' : '')} key={p.id}>
                   <div className={'premium-seat-name' + (p.id === gameState.currentPlayer ? ' premium-seat-name--turn' : '')}>
@@ -892,7 +894,7 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
             </div>
             <div className="premium-trump-label">Козырь: <strong>{gameState.trump || '—'}</strong></div>
             <div className="premium-table-zone">
-              <div className="premium-trick-playarea">
+              <div className={editorOpen ? 'premium-trick-playarea premium-edit-target' : 'premium-trick-playarea'} style={positionStyle('trick')} {...dragHandlers('trick')}>
                 {gameState.trick ? (
                   <>
                     <div className="premium-last-player">Ходил: {gameState.players[gameState.trick.attacker]?.name}</div>
@@ -906,7 +908,7 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
                   </>
                 ) : <span className="premium-waiting">Ожидание хода…</span>}
               </div>
-              <div className="premium-deck-zone">
+              <div className={editorOpen ? 'premium-deck-zone premium-edit-target' : 'premium-deck-zone'} style={positionStyle('deck')} {...dragHandlers('deck')}>
                 <div className="premium-deck-stack">
                   {gameState.deckCount > 0 && <div className="carpet-card-back premium-deck-card" />}
                   {gameState.trumpCard && <div className="premium-deck-trump"><CardView card={gameState.trumpCard} small /></div>}
@@ -919,7 +921,7 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
               <span>Бита А: {gameState.bitaCount?.A || 0}</span>
               <span>Бита Б: {gameState.bitaCount?.B || 0}</span>
             </div>
-            <div className="premium-hand-zone">
+            <div className={editorOpen ? 'premium-hand-zone premium-edit-target' : 'premium-hand-zone'} style={positionStyle('hand')} {...dragHandlers('hand')}>
               <div className="premium-hand" aria-label="Ваши карты">
                 {gameState.hand.map((card: any, index: number) => {
                   const selected = selectedCards.some(c => c.suit === card.suit && c.rank === card.rank);
