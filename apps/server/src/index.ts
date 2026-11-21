@@ -311,6 +311,8 @@ async function main() {
     if (idx < 0) { if(notify) socket.emit('kicked','Комната заполнена или игра уже началась'); return false; }
     const otherRoom = findRoomOfSocket(socket.id);
     if (otherRoom && otherRoom !== roomId) detach(socket,otherRoom,true);
+    // A private invitation takes precedence over automatic matchmaking.
+    quickCancel(socket.id);
     const newSeat=room.players[idx].name !== name;
     const oldSocket = seats[idx];
     if (oldSocket && oldSocket !== socket.id) { io.to(oldSocket).emit('kicked','Вход выполнен с другого подключения'); io.sockets.sockets.get(oldSocket)?.leave(roomId); }
