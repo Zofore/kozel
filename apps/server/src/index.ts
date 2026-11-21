@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { randomUUID, randomInt, createHmac } from 'node:crypto';
 import Fastify from 'fastify';
 import { Server } from 'socket.io';
-import { applyEvent, applyTurn, automaticTurn, GameState, project, getLegalMoves, PlayerId, normalizeBotDifficulty } from '@kozel/game-core';
+import { applyEvent, applyTurn, automaticTurn, GameState, project, getLegalMoves, PlayerId, BOT_DIFFICULTIES, BotDifficulty, normalizeBotDifficulty } from '@kozel/game-core';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { db } from './db';
@@ -12,6 +12,7 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3005;
 const rooms = new Map<string, GameState>();
 const playersInRoom = new Map<string, string[]>();
 const turnTimers = new Map<string, NodeJS.Timeout>();
+const botDifficulties = new Map<string, BotDifficulty>();
 const botTimeouts = new Map<string, NodeJS.Timeout>();
 const onlineUsers = new Map<string, string>();
 const frozenPlayers = new Map<string, Set<number>>();
@@ -200,7 +201,7 @@ async function main() {
     const run = async (bot = false) => {
       const current = rooms.get(roomId);
       if (!current || current.phase !== 'playing' || current.stateVersion !== version) return;
-      const res = bot ? automaticTurn(current, true, normalizeBotDifficulty(process.env.BOT_DIFFICULTY)) : automaticTurn(current);
+      const res = bot ? automaticTurn(current, true, botDifficulties.get(roomId)) : automaticTurn(current);
       if (res.ok) await checkAndBroadcast(io, roomId, res.state);
       else { app.log.error({roomId, error:res.error}, 'Automatic turn failed'); startTurnTimer(io,roomId); broadcastState(io,roomId,current); }
     };
@@ -232,8 +233,9 @@ async function main() {
     }, 4000);
   }
 
-  function createDevRoom(socket: any): string {
-    const roomId = 'DEV-' + randomUUID(); 
+  function createBotRoom(socket: any, difficulty: BotDifficulty, prefix: 'DEV-' | 'BOT-'): string {
+    const roomId = prefix + randomUUID();
+    botDifficulties.set(roomId, difficulty);
     const name = socket.data.user.username;
     const initialState: GameState = {
       mode: '1v1', players: [{ id: 0, side: 'A', hand: [], name, connected: true, isAdmin: isAdminId(socket.data.user.id) }, { id: 1, side: 'B', hand: [], name: '🤖 BOT', connected: true }],
@@ -253,7 +255,7 @@ async function main() {
   function removeRoom(roomId: string, reason: string) {
     io.to(roomId).emit('kicked',reason); io.in(roomId).socketsLeave(roomId);
     for (const id of playersInRoom.get(roomId) || []) if(id) leaveVoice(id);
-    rooms.delete(roomId); playersInRoom.delete(roomId); frozenPlayers.delete(roomId); roomActivity.delete(roomId); clearTurnTimer(roomId);
+    rooms.delete(roomId); botDifficulties.delete(roomId); playersInRoom.delete(roomId); frozenPlayers.delete(roomId); roomActivity.delete(roomId); clearTurnTimer(roomId);
   }
   function detach(socket: any, roomId: string, explicit = false) {
     const room = rooms.get(roomId), seats = playersInRoom.get(roomId);
@@ -267,7 +269,7 @@ async function main() {
       for(const [key,invite] of invitations) if(key.startsWith(roomId+':') && invite.from===name) invitations.delete(key);
     }
     roomActivity.set(roomId,Date.now());
-    if (explicit && (room.phase === 'waiting' && !seats.some(x=>x && x !== '__BOT__') || roomId.startsWith('DEV-'))) removeRoom(roomId,'Комната закрыта');
+    if (explicit && (room.phase === 'waiting' && !seats.some(x=>x && x !== '__BOT__') || botDifficulties.has(roomId))) removeRoom(roomId,'Комната закрыта');
     else broadcastState(io,roomId,room);
   }
   function join(socket: any, roomId: string, notify = true): boolean {
@@ -275,7 +277,7 @@ async function main() {
     if (!room || !seats) { if(notify) socket.emit('kicked','Комната не найдена'); return false; }
     const name = socket.data.user.username;
     let idx = room.players.findIndex((p,i)=>p.name === name && seats[i] !== '__BOT__');
-    if (idx < 0 && room.phase === 'waiting' && !roomId.startsWith('DEV-')) idx = room.players.findIndex((p,i)=>p.name === 'Ожидание...' && !seats[i]);
+    if (idx < 0 && room.phase === 'waiting' && !botDifficulties.has(roomId)) idx = room.players.findIndex((p,i)=>p.name === 'Ожидание...' && !seats[i]);
     if (idx < 0) { if(notify) socket.emit('kicked','Комната заполнена или игра уже началась'); return false; }
     const otherRoom = findRoomOfSocket(socket.id);
     if (otherRoom && otherRoom !== roomId) detach(socket,otherRoom,true);
@@ -285,7 +287,7 @@ async function main() {
     seats[idx] = socket.id; room.players[idx].name = name; room.players[idx].connected = true; room.players[idx].isAdmin=isAdminId(socket.data.user.id);
     if (oldSocket && oldSocket !== socket.id) leaveVoice(oldSocket);
     socket.join(roomId); roomActivity.set(roomId,Date.now());
-    if (newSeat && room.players[idx].isAdmin && !roomId.startsWith('DEV-')) io.to(roomId).emit('dev_joined',{name});
+    if (newSeat && room.players[idx].isAdmin && !botDifficulties.has(roomId)) io.to(roomId).emit('dev_joined',{name});
     if (room.phase === 'waiting' && seats.every(Boolean)) rollDiceForRoom(io,roomId);
     else broadcastState(io,roomId,room);
     return true;
@@ -295,8 +297,8 @@ async function main() {
     for (const [k,v] of attempts) if (v.expires <= now) attempts.delete(k);
     for (const [k,v] of invitations) if (v.expires <= now || !rooms.has(k.split(':')[0])) invitations.delete(k);
     for (const [id,room] of rooms) {
-      if (room.phase === 'finished' && !room.settled && !id.startsWith('DEV-')) void settle(id,room);
-      if (now - (roomActivity.get(id) || now) > 30*60_000 && !settling.has(id) && (room.phase !== 'finished' || room.settled || id.startsWith('DEV-'))) removeRoom(id,'Комната закрыта из-за неактивности');
+      if (room.phase === 'finished' && !room.settled && !botDifficulties.has(id)) void settle(id,room);
+      if (now - (roomActivity.get(id) || now) > 30*60_000 && !settling.has(id) && (room.phase !== 'finished' || room.settled || botDifficulties.has(id))) removeRoom(id,'Комната закрыта из-за неактивности');
     }
   },60_000); maintenance.unref();
 
@@ -415,10 +417,23 @@ async function main() {
       rooms.set(roomId,initialState); playersInRoom.set(roomId,seats); roomActivity.set(roomId,Date.now()); socket.join(roomId);
       if(typeof callback==='function') callback({roomId});
     });
+    socket.on('create_bot_room', (difficulty: BotDifficulty, callback: unknown) => {
+      if (typeof callback !== 'function') return;
+      if (!BOT_DIFFICULTIES.includes(difficulty)) {
+        callback({ error: 'Выберите уровень сложности' });
+        return;
+      }
+
+      const previous = findRoomOfSocket(socket.id);
+      if (previous) detach(socket, previous, true);
+      const roomId = createBotRoom(socket, difficulty, 'BOT-');
+      callback({ roomId });
+      rollDiceForRoom(io, roomId);
+    });
     socket.on('create_dev_room', (callback: any) => {
       if (!isAdmin) { if(typeof callback==='function') callback({error:'Доступ запрещён'}); return; }
       const previous=findRoomOfSocket(socket.id); if(previous) detach(socket,previous,true);
-      const id=createDevRoom(socket); if(typeof callback==='function') callback({roomId:id}); rollDiceForRoom(io,id);
+      const id=createBotRoom(socket, normalizeBotDifficulty(process.env.BOT_DIFFICULTY), 'DEV-'); if(typeof callback==='function') callback({roomId:id}); rollDiceForRoom(io,id);
     });
     socket.on('join_room', (roomId: string, legacyOrCallback?: any, callback?: any) => {
       const ack = typeof legacyOrCallback === 'function' ? legacyOrCallback : callback;
@@ -510,7 +525,7 @@ async function main() {
       }
       if (base === '/spawnbot') {
         if (myRoomId) { reply(`⚠️ Ты уже в комнате ${myRoomId}. Сначала выйди из неё.`, 'error'); return; }
-        const newRoomId = createDevRoom(socket); reply(`✅ DEV-комната ${newRoomId} создана. Перехожу в игру...`, 'success');
+        const newRoomId = createBotRoom(socket, normalizeBotDifficulty(process.env.BOT_DIFFICULTY), 'DEV-'); reply(`✅ DEV-комната ${newRoomId} создана. Перехожу в игру...`, 'success');
         socket.emit('dev_room_created', { roomId: newRoomId }); rollDiceForRoom(io, newRoomId); return;
       }
       reply(`❌ Неизвестная команда: ${base}`, 'error'); reply(`Доступные: /gold, /whoami, /freeze [ник], /reverse, /broadcast [текст], /listrooms, /spawnbot`);
@@ -549,7 +564,7 @@ async function main() {
     socket.on('admin_close_room', async (roomId: string) => {
       if (!isAdmin) return;
       const room = rooms.get(roomId); if (!room) return;
-      if(room.phase==='finished' && !room.settled && !roomId.startsWith('DEV-')) { await settle(roomId,room); if(!room.settled) { socket.emit('error','Результат ещё не сохранён'); return; } }
+      if(room.phase==='finished' && !room.settled && !botDifficulties.has(roomId)) { await settle(roomId,room); if(!room.settled) { socket.emit('error','Результат ещё не сохранён'); return; } }
       removeRoom(roomId,'Комната закрыта администратором');
       const roomsList = Array.from(rooms.entries()).map(([id, state]) => ({ id, mode: state.mode, phase: state.phase, round: state.roundNumber, players: state.players.map(p => p.name), matchScore: state.matchScore }));
       socket.emit('admin_rooms_list', roomsList);
@@ -558,7 +573,7 @@ async function main() {
 
   async function settle(roomId: string, state: GameState) {
     if(state.settled || settling.has(roomId)) return;
-    if(roomId.startsWith('DEV-')) { state.settled=true; return; }
+    if(botDifficulties.has(roomId)) { state.settled=true; return; }
     settling.add(roomId);
     try {
       const winningSide=state.matchScore.A>=24?'B':'A';

@@ -246,7 +246,7 @@ export function App() {
 
   // Сохраняем возможность вернуться только в незавершённую игру.
   const handleExitToLobby = (finalState?: any) => {
-    const resumable = roomId && !roomId.startsWith('DEV-') && finalState && !['waiting','finished'].includes(finalState.phase);
+    const resumable = roomId && !/^(DEV|BOT)-/.test(roomId) && finalState && !['waiting','finished'].includes(finalState.phase);
     setResumeRoomId(resumable ? roomId : null);
     if (roomId) socket.emit('leave_room',roomId);
     setRoomId(null);
