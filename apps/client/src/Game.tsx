@@ -362,7 +362,7 @@ const DiceRollScreen = ({ gameState }: { gameState: any }) => {
   );
 };
 
-export function Game({ socket, roomId, setRoomId, username, isAdmin = false, openDevConsole, onExit, onRematch }: { socket: Socket, roomId: string, setRoomId: any, username: string, isAdmin?: boolean, openDevConsole?: () => void, onExit: (state?: any) => void, onRematch?: (opponent: string) => void }) {
+export function Game({ socket, roomId, onInterruption, username, isAdmin = false, openDevConsole, onExit, onRematch }: { socket: Socket, roomId: string, setRoomId: any, username: string, isAdmin?: boolean, openDevConsole?: () => void, onExit: () => void, onRematch?: (opponent: string) => void }) {
   const [gameState, setGameState] = useState<any>(null);
   const [selectedCards, setSelectedCards] = useState<any[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -447,7 +447,7 @@ export function Game({ socket, roomId, setRoomId, username, isAdmin = false, ope
     };
     const onReaction = (data: any) => { playSound('pop'); setFloatingEmojis(prev => [...prev, data]); setTimeout(() => { setFloatingEmojis(prev => prev.filter(e => e.id !== data.id)); }, 2500); };
     let kickedTimer: ReturnType<typeof setTimeout> | undefined;
-    const onKicked = (msg: string) => { setErrorMsg(msg); if(kickedTimer) clearTimeout(kickedTimer); kickedTimer=setTimeout(() => setRoomId((current:string|null)=>current===roomId?null:current), 1500); };
+    const onKicked = (msg: string) => { setErrorMsg(msg); if(kickedTimer) clearTimeout(kickedTimer); kickedTimer=setTimeout(onInterruption, 1500); };
     const onAdminRain = () => {
       playSound('rain'); const emojis = ['🎉', '🎊', '💰', '🍀', '👑', '🔥', '⭐', '💎', '🎁', '💵'];
       const count = isMobile ? 25 : 60;
@@ -466,21 +466,26 @@ export function Game({ socket, roomId, setRoomId, username, isAdmin = false, ope
 
     socket.on('game_state', onState); socket.on('error', onError); socket.on('chat_message', onChatMessage); socket.on('reaction', onReaction); socket.on('kicked', onKicked); socket.on('admin_rain', onAdminRain); socket.on('dev_joined', onDevJoined); socket.on('admin_secret_fx', onAdminSecretFx); socket.on('admin_gold', onAdminGold); socket.on('admin_reverse', onAdminReverse);
     const join = () => socket.emit('join_room',roomId);
+    const onDisconnect = (reason: string) => {
+      if (reason !== 'io client disconnect') onInterruption();
+    };
+    socket.on('disconnect', onDisconnect);
     socket.on('connect',join);
     if(socket.connected) join();
     
     return () => { 
       if(kickedTimer) clearTimeout(kickedTimer);
       socket.off('connect',join);
+      socket.off('disconnect', onDisconnect);
       socket.off('game_state', onState); socket.off('error', onError); socket.off('chat_message', onChatMessage); socket.off('reaction', onReaction); socket.off('kicked', onKicked); socket.off('admin_rain', onAdminRain); socket.off('dev_joined', onDevJoined); socket.off('admin_secret_fx', onAdminSecretFx); socket.off('admin_gold', onAdminGold); socket.off('admin_reverse', onAdminReverse);
     };
-  }, [socket, roomId, username]);
+  }, [socket, roomId, username, onInterruption]);
 
   const sendMessage = (e: React.FormEvent) => { e.preventDefault(); if (!chatInput.trim()) return; socket.emit('chat_message', { roomId, sender: username, text: chatInput.trim() }); setChatInput(''); };
   const sendEmoji = (emoji: string) => { socket.emit('send_reaction', { roomId, emoji, sender: username }); setEmojiPickerOpen(false); };
   const unlockAudio = () => { if (!globalAudioCtx) globalAudioCtx = new (window.AudioContext || (window as any).webkitAudioContext)(); if (globalAudioCtx.state === 'suspended') globalAudioCtx.resume(); };
 
-  if (!gameState) return <div style={{ padding: 20, color: 'white', textAlign: 'center', fontSize: 24 }}>{errorMsg || 'Загрузка стола...'}<div><button onClick={()=>onExit()}>Выйти</button></div></div>;
+  if (!gameState) return <div style={{ padding: 20, color: 'white', textAlign: 'center', fontSize: 24 }}>{errorMsg || 'Загрузка стола...'}<div><button onClick={onInterruption}>Выйти</button></div></div>;
 
   if (gameState.roundNumber === 0 && gameState.phase !== 'dice-roll') {
     return (
@@ -491,7 +496,7 @@ export function Game({ socket, roomId, setRoomId, username, isAdmin = false, ope
           <p style={{ color: '#ccc', marginBottom: 20 }}>Отправьте ID комнаты другу, чтобы он присоединился</p>
           <div style={{ background: '#1a1a2e', padding: 15, borderRadius: 8, fontSize: 16, fontWeight: 'bold', overflowWrap:'anywhere', letterSpacing: 1, color: '#f0c674', marginBottom: 20 }}>{roomId}</div>
           <button onClick={()=>navigator.clipboard?.writeText(roomId).catch(()=>{})} style={{marginBottom:12,padding:'8px 16px',background:'transparent',border:'1px solid #f0c674',color:'#f0c674',borderRadius:8}}>Копировать ID</button>
-          <button onClick={() => { playSound('click'); onExit(gameState); }} style={{ padding: '12px 30px', background: 'transparent', color: '#f44336', border: '1px solid #f44336', borderRadius: 8, fontSize: 16, cursor: 'pointer', width: '100%' }}>Отменить</button>
+          <button onClick={() => { playSound('click'); onExit(); }} style={{ padding: '12px 30px', background: 'transparent', color: '#f44336', border: '1px solid #f44336', borderRadius: 8, fontSize: 16, cursor: 'pointer', width: '100%' }}>Отменить</button>
         </div>
       </div>
     );
@@ -559,7 +564,7 @@ export function Game({ socket, roomId, setRoomId, username, isAdmin = false, ope
           {isFinished && gameState.mode === '1v1' && onRematch && gameState.players.some((p: any) => p.name !== username && p.name !== 'Ожидание...' && !p.name.includes('BOT')) && (
             <button onClick={() => { playSound('click'); const opponent = gameState.players.find((p: any) => p.name !== username)?.name; if (opponent) onRematch(opponent); }} style={{display:'block', width:'100%', marginBottom:12, padding:'14px 18px', background:'#4caf50', color:'white', fontWeight:'bold', border:0, borderRadius:8, cursor:'pointer', minHeight:48}}>🔄 Реванш — пригласить соперника</button>
           )}
-          {isFinished ? <button onClick={() => { playSound('click'); onExit(gameState); }} style={{ padding: '15px 40px', background: titleColor, border: 'none', borderRadius: 8, fontSize: 20, fontWeight: 'bold', cursor: 'pointer', color: titleColor === '#ffd700' ? '#000' : '#fff' }}>Выйти в лобби</button> : <button onClick={() => { playSound('click'); if(socket.connected) socket.emit('next_round', roomId, gameState.stateVersion); }} style={{ padding: '15px 40px', background: '#f0c674', border: 'none', borderRadius: 8, fontSize: 20, fontWeight: 'bold', cursor: 'pointer' }}>Следующий кон</button>}
+          {isFinished ? <button onClick={() => { playSound('click'); onExit(); }} style={{ padding: '15px 40px', background: titleColor, border: 'none', borderRadius: 8, fontSize: 20, fontWeight: 'bold', cursor: 'pointer', color: titleColor === '#ffd700' ? '#000' : '#fff' }}>Выйти в лобби</button> : <button onClick={() => { playSound('click'); if(socket.connected) socket.emit('next_round', roomId, gameState.stateVersion); }} style={{ padding: '15px 40px', background: '#f0c674', border: 'none', borderRadius: 8, fontSize: 20, fontWeight: 'bold', cursor: 'pointer' }}>Следующий кон</button>}
         </div>
       </div>
     );
@@ -803,7 +808,7 @@ export function Game({ socket, roomId, setRoomId, username, isAdmin = false, ope
             <h2 id="exit-title" style={{ color:'#f0c674', marginTop:0 }}>Ты чё, сливаешься?</h2>
             <p>Ты лох и хочешь покинуть игру или ты норм пацан и продолжаем игру?</p>
             <div style={{ display:'flex', gap:12, flexWrap:'wrap', justifyContent:'center', marginTop:22 }}>
-              <button onClick={() => { setConfirmExit(false); onExit(gameState); }} style={{ padding:'14px 18px', borderRadius:9, border:'1px solid #aaa', background:'#404052', color:'white', cursor:'pointer', minHeight:48 }}>😅 Да, выхожу</button>
+              <button onClick={() => { setConfirmExit(false); onExit(); }} style={{ padding:'14px 18px', borderRadius:9, border:'1px solid #aaa', background:'#404052', color:'white', cursor:'pointer', minHeight:48 }}>😅 Да, выхожу</button>
               <button autoFocus onClick={() => setConfirmExit(false)} style={{ padding:'14px 18px', borderRadius:9, border:'none', background:'#277447', color:'white', fontWeight:700, cursor:'pointer', minHeight:48 }}>😎 Я в игре!</button>
             </div>
           </div>
