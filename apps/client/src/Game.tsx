@@ -828,7 +828,7 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
                   return (
                     <motion.div key={card.rank + card.suit} layoutId={cardStr}
                       className="premium-hand-item"
-                      style={{zIndex:index+1,marginLeft:index === 0 ? 0 : (isMobile ? -13 : -11)}}
+                      style={{zIndex:index+1,marginLeft:index === 0 ? 0 : (isMobile ? (gameState.hand.length > 7 ? -29 : -17) : (gameState.hand.length > 9 ? -51 : gameState.hand.length > 7 ? -38 : -22))}}
                       initial={{y:70,opacity:0,rotate:0}}
                       animate={{y:selected ? -17 : Math.abs(index-center)*2,opacity:1,rotate:(index-center)*3}}
                       transition={{type:'spring',stiffness:140,damping:20}}>
