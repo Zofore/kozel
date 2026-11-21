@@ -2,16 +2,25 @@ import React, { useState, useEffect } from 'react';
 import { Socket } from 'socket.io-client';
 
 import { API_URL, apiFetch, checkedJson } from './api';
-import { FriendChat } from './FriendChat';
+import { FriendChat, type ChatFriend } from './FriendChat';
 
-export function Friends({ socket, user, onRoom, onBack, showToast }: { socket: Socket, user: any, onRoom: (id:string)=>void, onBack: () => void, showToast: (msg: string, type?: 'success' | 'error' | 'info') => void }) {
+type Props = {
+  socket: Socket;
+  user: any;
+  onRoom: (id: string) => void;
+  onBack: () => void;
+  showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  chatFriend: ChatFriend | null;
+  onChatFriend: (friend: ChatFriend | null) => void;
+};
+
+export function Friends({ socket, user, onRoom, onBack, showToast, chatFriend, onChatFriend }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
   const [friends, setFriends] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
   const [refresh, setRefresh] = useState(0);
-  const [chatFriend, setChatFriend] = useState<{ username: string; fullname: string } | null>(null);
   const [friendToDelete, setFriendToDelete] = useState<string | null>(null);
 
   useEffect(() => {
@@ -98,7 +107,7 @@ export function Friends({ socket, user, onRoom, onBack, showToast }: { socket: S
 
   if (chatFriend) return (
     <div className="mobile-friends" style={{ padding: 20, maxWidth: 500, margin: '0 auto', color: 'white' }}>
-      <FriendChat key={chatFriend.username} socket={socket} username={user.username} friend={chatFriend} onBack={() => setChatFriend(null)} />
+      <FriendChat key={chatFriend.username} socket={socket} username={user.username} friend={friends.find(friend => friend.username === chatFriend.username) ?? chatFriend} onBack={() => onChatFriend(null)} />
     </div>
   );
 
@@ -208,7 +217,7 @@ export function Friends({ socket, user, onRoom, onBack, showToast }: { socket: S
             <div style={{ fontSize: 12, color: '#aaa', marginTop: 2 }}>🏆 {f.wins || 0} / 💀 {f.losses || 0}</div>
           </div>
           <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            <button type="button" onClick={() => setChatFriend(f)} style={{ background: '#394670', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 5, cursor: 'pointer' }}>Написать</button>
+            <button type="button" onClick={() => onChatFriend(f)} style={{ background: '#394670', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 5, cursor: 'pointer' }}>Написать</button>
             {f.online && (
               <button onClick={() => inviteFriend(f.username)} style={{ background: '#f0c674', color: '#000', border: 'none', padding: '8px 12px', borderRadius: 5, fontWeight: 'bold', cursor: 'pointer' }}>Пригласить</button>
             )}

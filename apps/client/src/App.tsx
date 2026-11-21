@@ -6,6 +6,7 @@ import { Lobby } from './Lobby';
 import { Game } from './Game';
 import { ProfileSettings } from './ProfileSettings';
 import { Friends } from './Friends';
+import type { ChatFriend, Message } from './FriendChat';
 import { MenuBackground } from './MenuBackground';
 import { RadioPlayer } from './RadioPlayer';
 import { DevConsole } from './DevConsole';
@@ -47,6 +48,15 @@ const toastStyles = `
   animation: slideDownFade 0.4s ease-out forwards, broadcastGlow 1.5s ease-in-out infinite;
   top: 80px;
 }
+.cloud-toast.toast-message {
+  top: auto; bottom: 20px; bottom: max(20px, env(safe-area-inset-bottom));
+  width: min(420px, calc(100% - 32px)); box-sizing: border-box; padding: 8px 12px;
+}
+.toast-message button {
+  font: inherit; color: inherit; background: transparent; border: 0; cursor: pointer; padding: 8px;
+}
+.toast-message .toast-message-open { flex: 1; min-width: 0; text-align: left; }
+.toast-message-preview { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cloud-toast.fade-out { animation: fadeOut 0.5s ease-in forwards; }
 
 .modal-overlay {
@@ -83,6 +93,10 @@ export function App() {
   const [resumeRoomId, setResumeRoomId] = useState<string | null>(() => localStorage.getItem('kozel_resume_room'));
   const [view, setView] = useState<'menu' | 'lobby' | 'profile' | 'friends'>('menu');
   
+  const [chatFriend, setChatFriend] = useState<ChatFriend | null>(null);
+  const [messageNotifications, setMessageNotifications] = useState<Message[]>([]);
+  const activeChat = !roomId && view === 'friends' ? chatFriend?.username : undefined;
+  const messageNotification = messageNotifications.find(message => message.sender !== activeChat);
   const [friendRequestToast, setFriendRequestToast] = useState<string | null>(null);
   const [genericToast, setGenericToast] = useState<{ msg: string, type: 'success' | 'error' | 'info' } | null>(null);
   const [broadcastToast, setBroadcastToast] = useState<{ text: string, from: string } | null>(null);
@@ -183,6 +197,34 @@ export function App() {
     };
   }, [isDev]);
 
+  useEffect(() => {
+    const username = user?.username;
+    if (!username) return;
+
+    const receiveMessage = (message: Message) => {
+      if (message.recipient !== username || message.sender === username || message.sender === activeChat) return;
+      setMessageNotifications(previous => {
+        const existing = previous.find(notification => notification.sender === message.sender);
+        if (existing && existing.id >= message.id) return previous;
+        return existing
+          ? previous.map(notification => notification.sender === message.sender ? message : notification)
+          : [...previous, message];
+      });
+    };
+
+    socket.on('friend_message', receiveMessage);
+    return () => { socket.off('friend_message', receiveMessage); };
+  }, [user?.username, activeChat]);
+
+  const dismissMessageNotification = (sender: string) => {
+    setMessageNotifications(previous => previous.filter(message => message.sender !== sender));
+  };
+
+  const selectChat = (friend: ChatFriend | null) => {
+    if (friend) dismissMessageNotification(friend.username);
+    setChatFriend(friend);
+  };
+
   const acceptInvite = () => {
     if (!inviteModal) return;
     socket.timeout(5000).emit('accept_invite', { roomId: inviteModal.roomId }, (err: any,res:any) => {
@@ -214,6 +256,8 @@ export function App() {
     ['kozel_user','kozel_token','kozel_room','kozel_resume_room'].forEach(key=>localStorage.removeItem(key));
     socket.disconnect(); socket.auth={};
     setUser(null);
+    setChatFriend(null);
+    setMessageNotifications([]);
     setRoomId(null);
     setResumeRoomId(null);
     setView('menu');
@@ -309,7 +353,7 @@ export function App() {
     content = <Game key={roomId} socket={socket} roomId={roomId} onInterruption={handleInterruption} username={user.username} isAdmin={isDev} openDevConsole={() => setDevConsoleOpen(true)} onExit={handleExitToLobby} onRematch={handleRematch} />;
   }
   else if (view === 'profile') content = <ProfileSettings user={user} onSave={updateProfile} onBack={() => setView('menu')} />;
-  else if (view === 'friends') content = <Friends socket={socket} user={user} onRoom={setRoomId} onBack={() => setView('menu')} showToast={showToast} />;
+  else if (view === 'friends') content = <Friends socket={socket} user={user} onRoom={setRoomId} onBack={() => { setChatFriend(null); setView('menu'); }} showToast={showToast} chatFriend={chatFriend} onChatFriend={selectChat} />;
   else if (view === 'lobby') content = <Lobby socket={socket} setRoomId={setRoomId} username={user.username} onBack={() => setView('menu')} />;
   else content = <Menu socket={socket} user={user} onPlay={() => setView('lobby')} onProfile={() => setView('profile')} onFriends={() => setView('friends')} onLogout={handleLogout} onResume={handleResume} canResume={Boolean(resumeRoomId)} />;
 
@@ -337,7 +381,7 @@ export function App() {
         )}
 
         {friendRequestToast && (
-          <div className="cloud-toast" onClick={() => { setView('friends'); closeFriendToast(); }} style={{ cursor: 'pointer' }}>
+          <div className="cloud-toast" onClick={() => { setChatFriend(null); setView('friends'); closeFriendToast(); }} style={{ cursor: 'pointer' }}>
             <div style={{ fontSize: 28 }}>☁️</div>
             <div>
               <div style={{ fontWeight: 'bold', color: '#f0c674', fontSize: 16 }}>Новая заявка в друзья!</div>
@@ -364,6 +408,21 @@ export function App() {
             <div style={{ fontSize: 24 }}>{genericToast.type === 'success' ? '✅' : genericToast.type === 'error' ? '❌' : 'ℹ️'}</div>
             <div style={{ fontWeight: 'bold' }}>{genericToast.msg}</div>
             <div style={{ fontSize: 20, color: '#aaa', marginLeft: 'auto', cursor: 'pointer' }} onClick={() => setGenericToast(null)}>✖</div>
+          </div>
+        )}
+
+        {!roomId && messageNotification && (
+          <div className="cloud-toast toast-message" role="group" aria-label="Новое личное сообщение">
+            <button type="button" className="toast-message-open" onClick={() => {
+              const sender = messageNotification.sender;
+              selectChat({ username: sender, fullname: sender });
+              setView('friends');
+            }}>
+              <strong style={{ color: '#f0c674', overflowWrap: 'anywhere' }}>{messageNotification.sender}</strong>
+              <span className="toast-message-preview">{messageNotification.body}</span>
+              <span style={{ fontSize: 12 }}>Открыть чат</span>
+            </button>
+            <button type="button" aria-label="Закрыть уведомление" onClick={() => dismissMessageNotification(messageNotification.sender)}>✕</button>
           </div>
         )}
 
