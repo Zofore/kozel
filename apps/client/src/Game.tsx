@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, memo } from 'react';
 import { Socket } from 'socket.io-client';
 import { motion, LayoutGroup } from 'framer-motion';
 import { Goat3D } from './Goat3D';
+import { VoiceChat } from './VoiceChat';
 
 const SUIT_MAP: any = { '♠': 'S', '♥': 'H', '♦': 'D', '♣': 'C' };
 const getAvatar = (name: string) => `https://api.dicebear.com/7.x/adventurer/svg?seed=${name || 'default'}`;
@@ -505,6 +506,8 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
   const teamName = (side:string) => gameState.players.filter((p:any)=>p.side===side).map((p:any)=>p.name).join(' / ');
   if (gameState.phase === 'dice-roll') return <DiceRollScreen gameState={gameState} />;
 
+  const voiceChat = <VoiceChat socket={socket} roomId={roomId} />;
+
   if (gameState.phase === 'round-scored' || gameState.phase === 'finished') {
     const isFinished = gameState.phase === 'finished';
     const ptsA = gameState.lastRoundPoints?.A ?? 0;
@@ -532,41 +535,44 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
     }
 
     return (
-      <div className="mobile-screen mobile-result" onClick={unlockAudio} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', background: isFinished ? (titleColor === '#ffd700' ? 'radial-gradient(circle, #2a2a10 0%, #0a0a05 100%)' : 'radial-gradient(circle, #2a1010 0%, #0a0505 100%)') : '#1a1a2e', position: 'relative', overflow: 'hidden' }}>
-        <style>{floatingEmojiStyle}</style>
-        {floatingEmojis.map(e => <div key={e.id} className="floating-emoji" style={{ left: `${e.left}%` }}>{e.emoji}</div>)}
-        {rainEmojis.map(e => <div key={e.id} className="rain-emoji" style={{ left: `${e.left}%`, animationDuration: `${e.duration}s` }}>{e.emoji}</div>)}
-        {matchConfetti.map(e => <div key={e.id} className="gold-emoji" style={{ left: `${e.left}%`, animationDuration: `${e.duration}s`, fontSize: 40 }}>{e.emoji}</div>)}
+      <LayoutGroup>
+        {voiceChat}
+        <div className="mobile-screen mobile-result" onClick={unlockAudio} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', background: isFinished ? (titleColor === '#ffd700' ? 'radial-gradient(circle, #2a2a10 0%, #0a0a05 100%)' : 'radial-gradient(circle, #2a1010 0%, #0a0505 100%)') : '#1a1a2e', position: 'relative', overflow: 'hidden' }}>
+          <style>{floatingEmojiStyle}</style>
+          {floatingEmojis.map(e => <div key={e.id} className="floating-emoji" style={{ left: `${e.left}%` }}>{e.emoji}</div>)}
+          {rainEmojis.map(e => <div key={e.id} className="rain-emoji" style={{ left: `${e.left}%`, animationDuration: `${e.duration}s` }}>{e.emoji}</div>)}
+          {matchConfetti.map(e => <div key={e.id} className="gold-emoji" style={{ left: `${e.left}%`, animationDuration: `${e.duration}s`, fontSize: 40 }}>{e.emoji}</div>)}
 
-        <div className="mobile-panel" style={{ padding: 40, textAlign: 'center', color: 'white', maxWidth: 600, background: 'rgba(20, 20, 35, 0.95)', backdropFilter: 'blur(10px)', borderRadius: 16, boxShadow: isFinished ? `0 10px 30px rgba(0,0,0,0.8), 0 0 40px ${titleColor}40` : '0 10px 30px rgba(0,0,0,0.5)', border: `2px solid ${titleColor}`, zIndex: 10 }}>
-          {amIWinner && <Goat3D celebrate />}
-          <h1 style={{ color: titleColor, fontSize: isFinished ? 42 : 32, textShadow: `0 0 20px ${titleColor}80`, marginBottom: 10 }}>{matchTitle}</h1>
-          {isFinished && <p style={{ color: '#ccc', fontSize: 18, marginBottom: 30 }}>{matchEmotion}</p>}
-          
-          {gameState.lastRoundPoints && (
-            <div style={{ background: 'rgba(255,255,255,0.1)', padding: 15, borderRadius: 12, margin: '20px 0' }}>
-              <h3 style={{ margin: '0 0 10px 0', color: '#aaa', fontSize: 16 }}>Очки за кон (карты):</h3>
-              <div style={{ display: 'flex', justifyContent: 'space-around', fontSize: 18 }}>
-                <span>{teamName('A')}: <b style={{ color: 'white' }}>{ptsA}</b></span><span>{teamName('B')}: <b style={{ color: 'white' }}>{ptsB}</b></span>
+          <div className="mobile-panel" style={{ padding: 40, textAlign: 'center', color: 'white', maxWidth: 600, background: 'rgba(20, 20, 35, 0.95)', backdropFilter: 'blur(10px)', borderRadius: 16, boxShadow: isFinished ? `0 10px 30px rgba(0,0,0,0.8), 0 0 40px ${titleColor}40` : '0 10px 30px rgba(0,0,0,0.5)', border: `2px solid ${titleColor}`, zIndex: 10 }}>
+            {amIWinner && <Goat3D celebrate />}
+            <h1 style={{ color: titleColor, fontSize: isFinished ? 42 : 32, textShadow: `0 0 20px ${titleColor}80`, marginBottom: 10 }}>{matchTitle}</h1>
+            {isFinished && <p style={{ color: '#ccc', fontSize: 18, marginBottom: 30 }}>{matchEmotion}</p>}
+
+            {gameState.lastRoundPoints && (
+              <div style={{ background: 'rgba(255,255,255,0.1)', padding: 15, borderRadius: 12, margin: '20px 0' }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#aaa', fontSize: 16 }}>Очки за кон (карты):</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-around', fontSize: 18 }}>
+                  <span>{teamName('A')}: <b style={{ color: 'white' }}>{ptsA}</b></span><span>{teamName('B')}: <b style={{ color: 'white' }}>{ptsB}</b></span>
+                </div>
+                {ptsA === 60 && ptsB === 60 && <div style={{ color: '#f0c674', marginTop: 10, fontWeight: 'bold' }}>ЯЙЦА! (60:60)</div>}
               </div>
-              {ptsA === 60 && ptsB === 60 && <div style={{ color: '#f0c674', marginTop: 10, fontWeight: 'bold' }}>ЯЙЦА! (60:60)</div>}
+            )}
+            <div style={{ fontSize: 20, margin: '30px 0', lineHeight: '1.6', background: 'rgba(0,0,0,0.4)', padding: 20, borderRadius: 12, border: '1px solid #333' }}>
+              <h3 style={{ margin: '0 0 15px 0', color: '#aaa', fontSize: 16 }}>Штрафные баллы (до 24):</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
+                <div style={{ color: colorA }}><div style={{ fontSize: 16, marginBottom: 5 }}>{teamName('A')}</div><div style={{ fontSize: 32, fontWeight: 'bold' }}>{scoreA}</div></div>
+                <div style={{ color: '#555', fontSize: 24 }}>—</div>
+                <div style={{ color: colorB }}><div style={{ fontSize: 16, marginBottom: 5 }}>{teamName('B')}</div><div style={{ fontSize: 32, fontWeight: 'bold' }}>{scoreB}</div></div>
+              </div>
+              <div style={{ fontSize: 12, color: '#666', marginTop: 15 }}>Тот, у кого меньше баллов, играет лучше! (Зеленый)</div>
             </div>
-          )}
-          <div style={{ fontSize: 20, margin: '30px 0', lineHeight: '1.6', background: 'rgba(0,0,0,0.4)', padding: 20, borderRadius: 12, border: '1px solid #333' }}>
-            <h3 style={{ margin: '0 0 15px 0', color: '#aaa', fontSize: 16 }}>Штрафные баллы (до 24):</h3>
-            <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
-              <div style={{ color: colorA }}><div style={{ fontSize: 16, marginBottom: 5 }}>{teamName('A')}</div><div style={{ fontSize: 32, fontWeight: 'bold' }}>{scoreA}</div></div>
-              <div style={{ color: '#555', fontSize: 24 }}>—</div>
-              <div style={{ color: colorB }}><div style={{ fontSize: 16, marginBottom: 5 }}>{teamName('B')}</div><div style={{ fontSize: 32, fontWeight: 'bold' }}>{scoreB}</div></div>
-            </div>
-            <div style={{ fontSize: 12, color: '#666', marginTop: 15 }}>Тот, у кого меньше баллов, играет лучше! (Зеленый)</div>
+            {isFinished && gameState.mode === '1v1' && onRematch && gameState.players.some((p: any) => p.name !== username && p.name !== 'Ожидание...' && !p.name.includes('BOT')) && (
+              <button onClick={() => { playSound('click'); const opponent = gameState.players.find((p: any) => p.name !== username)?.name; if (opponent) onRematch(opponent); }} style={{display:'block', width:'100%', marginBottom:12, padding:'14px 18px', background:'#4caf50', color:'white', fontWeight:'bold', border:0, borderRadius:8, cursor:'pointer', minHeight:48}}>🔄 Реванш — пригласить соперника</button>
+            )}
+            {isFinished ? <button onClick={() => { playSound('click'); onExit(); }} style={{ padding: '15px 40px', background: titleColor, border: 'none', borderRadius: 8, fontSize: 20, fontWeight: 'bold', cursor: 'pointer', color: titleColor === '#ffd700' ? '#000' : '#fff' }}>Выйти в лобби</button> : <button onClick={() => { playSound('click'); if(socket.connected) socket.emit('next_round', roomId, gameState.stateVersion); }} style={{ padding: '15px 40px', background: '#f0c674', border: 'none', borderRadius: 8, fontSize: 20, fontWeight: 'bold', cursor: 'pointer' }}>Следующий кон</button>}
           </div>
-          {isFinished && gameState.mode === '1v1' && onRematch && gameState.players.some((p: any) => p.name !== username && p.name !== 'Ожидание...' && !p.name.includes('BOT')) && (
-            <button onClick={() => { playSound('click'); const opponent = gameState.players.find((p: any) => p.name !== username)?.name; if (opponent) onRematch(opponent); }} style={{display:'block', width:'100%', marginBottom:12, padding:'14px 18px', background:'#4caf50', color:'white', fontWeight:'bold', border:0, borderRadius:8, cursor:'pointer', minHeight:48}}>🔄 Реванш — пригласить соперника</button>
-          )}
-          {isFinished ? <button onClick={() => { playSound('click'); onExit(); }} style={{ padding: '15px 40px', background: titleColor, border: 'none', borderRadius: 8, fontSize: 20, fontWeight: 'bold', cursor: 'pointer', color: titleColor === '#ffd700' ? '#000' : '#fff' }}>Выйти в лобби</button> : <button onClick={() => { playSound('click'); if(socket.connected) socket.emit('next_round', roomId, gameState.stateVersion); }} style={{ padding: '15px 40px', background: '#f0c674', border: 'none', borderRadius: 8, fontSize: 20, fontWeight: 'bold', cursor: 'pointer' }}>Следующий кон</button>}
         </div>
-      </div>
+      </LayoutGroup>
     );
   }
 
@@ -591,6 +597,7 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
 
   return (
     <LayoutGroup>
+      {voiceChat}
       <div className="mobile-game" onClick={unlockAudio} style={{
         display: 'flex', flexDirection: 'column', height: '100vh',
         background: '#1a1a2e', position: 'relative', overflow: 'hidden',
