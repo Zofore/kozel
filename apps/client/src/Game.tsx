@@ -964,6 +964,44 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
             </div>
           </footer>
           {errorMsg && <div className="premium-error" role="alert">{errorMsg}</div>}
+
+        {editorOpen && isAdmin && (
+          <aside className="premium-editor" aria-label="Конструктор игрового стола">
+            <div className="premium-editor-heading">
+              <strong>🎨 Конструктор стола</strong>
+              <button type="button" onClick={closeEditor} aria-label="Закрыть конструктор">✕</button>
+            </div>
+            <p>Перетаскивай выделенные блоки на столе или используй ползунки. До сохранения изменения видны только тебе.</p>
+            <div className="premium-editor-tabs">
+              <button type="button" className={editorMode==='desktop'?'chosen':''} onClick={()=>setEditorMode('desktop')}>Компьютер</button>
+              <button type="button" className={editorMode==='mobile'?'chosen':''} onClick={()=>setEditorMode('mobile')}>Телефон</button>
+            </div>
+            <label className="premium-editor-color">Цвет бархата <input type="color" value={activeVisual.felt} onChange={e=>changeVisual(part=>({...part,felt:e.target.value}))}/></label>
+            <label className="premium-editor-color">Окантовка <input type="color" value={activeVisual.edge} onChange={e=>changeVisual(part=>({...part,edge:e.target.value}))}/></label>
+            <label className="premium-editor-range">Размер карт: {activeVisual.cardScale}%
+              <input type="range" min="75" max="135" step="5" value={activeVisual.cardScale} onChange={e=>changeVisual(part=>({...part,cardScale:Number(e.target.value)}))}/>
+            </label>
+            <strong className="premium-editor-caption">Расположение элементов</strong>
+            {(['opponents','trick','deck','hand','voice'] as VisualPlace[]).map(key=>(
+              <div className="premium-editor-position" key={key}>
+                <strong>{positionLabels[key]}</strong>
+                <label>↔ {activeVisual.positions[key].x}
+                  <input type="range" min="-35" max="35" value={activeVisual.positions[key].x} onChange={e=>changePosition(key,{...activeVisual.positions[key],x:Number(e.target.value)})}/>
+                </label>
+                <label>↕ {activeVisual.positions[key].y}
+                  <input type="range" min="-35" max="35" value={activeVisual.positions[key].y} onChange={e=>changePosition(key,{...activeVisual.positions[key],y:Number(e.target.value)})}/>
+                </label>
+              </div>
+            ))}
+            <div className="premium-editor-controls">
+              <button type="button" onClick={()=>{setVisual(v=>({...v,[editorMode]:newVisualPart()}));setVisualStatus('Сброшено в предпросмотре')}}>Стандартный вид</button>
+              <button type="button" onClick={closeEditor}>Отмена</button>
+              <button className="premium-editor-save" type="button" onClick={()=>void saveVisual()}>Сохранить для всех</button>
+            </div>
+            {visualStatus && <div role="status" className="premium-editor-status">{visualStatus}</div>}
+          </aside>
+        )}
+
         </div>
       </div>
       {confirmExit && (
