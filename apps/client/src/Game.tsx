@@ -3,6 +3,22 @@ import { Socket } from 'socket.io-client';
 import { motion, LayoutGroup } from 'framer-motion';
 import { Goat3D } from './Goat3D';
 import { VoiceChat } from './VoiceChat';
+import { API_URL, apiFetch } from './api';
+
+type VisualPlace = 'opponents' | 'trick' | 'deck' | 'hand' | 'voice';
+type VisualMode = 'desktop' | 'mobile';
+type VisualPosition = { x:number; y:number };
+type VisualPart = {felt:string;edge:string;cardScale:number;positions:Record<VisualPlace,VisualPosition>};
+type VisualSettings = Record<VisualMode,VisualPart>;
+const newVisualPart = ():VisualPart => ({
+  felt:'#08714e',edge:'#d8ae60',cardScale:100,
+  positions:{opponents:{x:0,y:0},trick:{x:0,y:0},deck:{x:0,y:0},hand:{x:0,y:0},voice:{x:0,y:0}}
+});
+const newVisualSettings=():VisualSettings=>({desktop:newVisualPart(),mobile:newVisualPart()});
+const positionLabels:Record<VisualPlace,string>={
+  opponents:'Соперники',trick:'Карты на столе',deck:'Колода',hand:'Моя рука',voice:'Микрофон'
+};
+const clampVisual=(v:number)=>Math.min(35,Math.max(-35,Math.round(v)));
 
 const getAvatar = (name: string) => `https://api.dicebear.com/7.x/adventurer/svg?seed=${name || 'default'}`;
 
@@ -469,10 +485,95 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth <= 820);
   const [confirmExit, setConfirmExit] = useState(false);
   const [premiumSettingsOpen, setPremiumSettingsOpen] = useState(false);
+  const [visual, setVisual] = useState<VisualSettings>(() => newVisualSettings());
+  const [storedVisual, setStoredVisual] = useState<VisualSettings>(() => newVisualSettings());
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorMode, setEditorMode] = useState<VisualMode>(window.innerWidth<=820 ? 'mobile' : 'desktop');
+  const [visualStatus, setVisualStatus] = useState('');
+  const visualDrag = useRef<{key:VisualPlace;x:number;y:number;start:VisualPosition}|null>(null);
 
   const prevState = useRef<any>(null);
   const lastProcessedMsgId = useRef<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let mounted=true;
+    const refresh=async()=>{
+      try {
+        const response=await apiFetch(API_URL+'/api/table-visual');
+        if(!response.ok) return;
+        const settings=await response.json() as VisualSettings;
+        if(!mounted) return;
+        setStoredVisual(settings);
+        if(!editorOpen) setVisual(settings);
+      } catch { /* Offline game retains defaults. */ }
+    };
+    void refresh();
+    const update=(settings:VisualSettings)=>{
+      if(!mounted) return;
+      setStoredVisual(settings);
+      if(!editorOpen) setVisual(settings);
+    };
+    socket.on('table_visual_updated',update);
+    return ()=>{mounted=false;socket.off('table_visual_updated',update);};
+  },[socket,editorOpen]);
+
+  const changeVisual=(modify:(part:VisualPart)=>VisualPart)=>{
+    setVisual(prev=>({...prev,[editorMode]:modify(prev[editorMode])}));
+    setVisualStatus('Не сохранено');
+  };
+  const changePosition=(key:VisualPlace,value:VisualPosition)=>{
+    changeVisual(part=>({...part,positions:{...part.positions,[key]:value}}));
+  };
+  const closeEditor=()=>{
+    setVisual(storedVisual);setEditorOpen(false);setVisualStatus('');
+  };
+  const saveVisual=async()=>{
+    if(!isAdmin) return;
+    setVisualStatus('Сохраняем…');
+    try {
+      const response=await apiFetch(API_URL+'/api/table-visual',{
+        method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(visual)
+      });
+      const result=await response.json();
+      if(!response.ok) throw new Error(result.error || 'Ошибка сохранения');
+      setStoredVisual(result.settings);
+      setVisual(result.settings);
+      setVisualStatus('Сохранено для всех игроков');
+      setEditorOpen(false);
+    } catch(error) {setVisualStatus(error instanceof Error ? error.message : 'Ошибка сохранения');}
+  };
+  const activeVisual=visual[editorOpen?editorMode:(isMobile?'mobile':'desktop')];
+  const positionStyle=(key:VisualPlace):React.CSSProperties=>({
+    translate:String(activeVisual.positions[key].x*(isMobile?4:8))+'px '+String(activeVisual.positions[key].y*(isMobile?4:8))+'px'
+  });
+  const dragHandlers=(key:VisualPlace)=>({
+    onPointerDownCapture:(event:React.PointerEvent<HTMLDivElement>)=>{
+      if(!editorOpen||!isAdmin) return;
+      event.preventDefault();event.stopPropagation();
+      visualDrag.current={key,x:event.clientX,y:event.clientY,start:{...activeVisual.positions[key]}};
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    },
+    onPointerMove:(event:React.PointerEvent<HTMLDivElement>)=>{
+      const drag=visualDrag.current;
+      if(!editorOpen||!isAdmin||!drag||drag.key!==key) return;
+      const step=isMobile?4:8;
+      changePosition(key,{
+        x:clampVisual(drag.start.x+(event.clientX-drag.x)/step),
+        y:clampVisual(drag.start.y+(event.clientY-drag.y)/step)
+      });
+    },
+    onPointerUp:(event:React.PointerEvent<HTMLDivElement>)=>{
+      if(visualDrag.current?.key===key){
+        visualDrag.current=null;
+        event.currentTarget.releasePointerCapture?.(event.pointerId);
+      }
+    },
+    onPointerCancel:()=>{visualDrag.current=null;},
+    onClickCapture:(event:React.MouseEvent<HTMLDivElement>)=>{
+      if(editorOpen&&isAdmin){event.preventDefault();event.stopPropagation();}
+    }
+  });
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 820);
