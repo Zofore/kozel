@@ -1,3 +1,4 @@
+import { passCardCount } from './trick';
 import { Card, CARD_POINTS, RANK_VALUE, Suit } from './card';
 import { GameState } from './state';
 import { getLegalMoves } from './legalMoves';
@@ -71,7 +72,7 @@ export function chooseBotMove(state: GameState, difficulty: BotDifficulty = 'pro
 /** If unable/unwilling to beat, discard exactly the amount required by game rules. */
 export function chooseBotDiscard(state: GameState, difficulty: BotDifficulty = 'professional'): Card[] {
   const hand = state.players[state.currentPlayer]?.hand || [];
-  const required = Math.min(state.trick?.required || 0, hand.length);
+  const required = state.trick ? passCardCount(state.mode, state.trick, state.currentPlayer, hand.length) : 0;
   if (!required) return [];
   const level = normalizeBotDifficulty(difficulty);
   if (level === 'novice') return hand.slice(0, required);
