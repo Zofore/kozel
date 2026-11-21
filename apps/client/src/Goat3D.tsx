@@ -1,16 +1,39 @@
 import React, { useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Float, Center } from '@react-three/drei';
+import { Center } from '@react-three/drei';
+import { useReducedMotion } from 'framer-motion';
 import * as THREE from 'three';
 
-const GoatModel = ({ scale = 1 }: { scale?: number }) => {
-  const groupRef = useRef<THREE.Group>(null);
+const GoatModel = ({ celebrate, reducedMotion }: { celebrate: boolean; reducedMotion: boolean }) => {
+  const head = useRef<THREE.Group>(null);
+  const eyes = useRef<THREE.Group>(null);
+  const elapsed = useRef(0);
 
-  useFrame((state, delta) => {
-    if (groupRef.current) {
-      // Медленно вращаем голову по кругу
-      groupRef.current.rotation.y += delta * 0.5;
+  useFrame((_, delta) => {
+    if (!head.current || !eyes.current) return;
+    if (reducedMotion) {
+      head.current.rotation.set(0, 0, 0);
+      head.current.position.y = 0;
+      eyes.current.scale.y = 1;
+      return;
     }
+
+    elapsed.current += Math.min(delta, 0.05);
+    const time = elapsed.current;
+    const blink = (time + 2) % 5.3;
+    eyes.current.scale.y = blink < 0.18 ? 1 - 0.95 * Math.sin(Math.PI * blink / 0.18) : 1;
+
+    if (celebrate) {
+      const progress = Math.min(1, time / 1.6);
+      const bounce = Math.sin(Math.PI * progress) ** 2;
+      head.current.position.y = 0.3 * bounce * Math.abs(Math.sin(2 * Math.PI * progress));
+      head.current.rotation.z = 0.26 * bounce * Math.sin(4 * Math.PI * progress);
+      return;
+    }
+
+    const nod = time % 7;
+    head.current.rotation.x = nod > 5.6 ? 0.21 * Math.sin(Math.PI * (nod - 5.6) / 1.4) ** 2 : 0;
+    head.current.rotation.y = 0.13 * Math.sin(time * 0.75);
   });
 
   const goldMat = <meshStandardMaterial color="#ffd700" metalness={1} roughness={0.15} emissive="#ffa500" emissiveIntensity={0.2} />;
@@ -18,7 +41,7 @@ const GoatModel = ({ scale = 1 }: { scale?: number }) => {
   const eyeMat = <meshStandardMaterial color="#ff0000" emissive="#ff0000" emissiveIntensity={5} toneMapped={false} />;
 
   return (
-    <group ref={groupRef} scale={scale}>
+    <group ref={head}>
       {/* Основа черепа (темный металл) */}
       <mesh position={[0, 0, 0]}>
         <boxGeometry args={[1, 1.2, 0.8]} />
@@ -49,17 +72,16 @@ const GoatModel = ({ scale = 1 }: { scale?: number }) => {
         {goldMat}
       </mesh>
 
-      {/* Левый глаз (светится) */}
-      <mesh position={[-0.25, 0.1, 0.55]}>
-        <sphereGeometry args={[0.12, 16, 16]} />
-        {eyeMat}
-      </mesh>
-
-      {/* Правый глаз (светится) */}
-      <mesh position={[0.25, 0.1, 0.55]}>
-        <sphereGeometry args={[0.12, 16, 16]} />
-        {eyeMat}
-      </mesh>
+      <group ref={eyes} position={[0, 0.1, 0.55]}>
+        <mesh position={[-0.25, 0, 0]}>
+          <sphereGeometry args={[0.12, 16, 16]} />
+          {eyeMat}
+        </mesh>
+        <mesh position={[0.25, 0, 0]}>
+          <sphereGeometry args={[0.12, 16, 16]} />
+          {eyeMat}
+        </mesh>
+      </group>
 
       {/* Золотая борода */}
       <mesh position={[0, -1.1, 0.4]} rotation={[0.2, 0, 0]}>
@@ -70,11 +92,12 @@ const GoatModel = ({ scale = 1 }: { scale?: number }) => {
   );
 };
 
-export const Goat3D = () => {
+export const Goat3D = ({ celebrate = false }: { celebrate?: boolean }) => {
+  const reducedMotion = Boolean(useReducedMotion());
   const isMobile = typeof window !== 'undefined' && window.innerWidth <= 820;
-  const size = isMobile ? 90 : 140;
+  const size = celebrate ? 80 : isMobile ? 90 : 140;
   return (
-    <div style={{ width: size, height: size, margin: '0 auto', cursor: 'grab' }}>
+    <div aria-hidden="true" style={{ width: size, height: size, margin: '0 auto' }}>
       <Canvas camera={{ position: [0, 0, 4.5], fov: isMobile ? 60 : 50 }}>
         <ambientLight intensity={1.5} />
         {/* Свет, чтобы золото переливалось */}
@@ -82,11 +105,9 @@ export const Goat3D = () => {
         <directionalLight position={[-5, 5, -5]} intensity={2} color="#f0c674" />
         <pointLight position={[0, -2, 2]} intensity={2} color="#ffd700" />
 
-        <Float speed={2} rotationIntensity={0.4} floatIntensity={2}>
-          <Center>
-            <GoatModel scale={isMobile ? 0.8 : 1} />
-          </Center>
-        </Float>
+        <Center scale={isMobile ? 0.8 : 1}>
+          <GoatModel celebrate={celebrate} reducedMotion={reducedMotion} />
+        </Center>
       </Canvas>
     </div>
   );

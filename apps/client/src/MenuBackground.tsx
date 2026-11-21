@@ -118,11 +118,11 @@ const Croupier = ({ color, side }: { color: string, side: 'left' | 'right' }) =>
 );
 
 // --- ЛЮСТРА ---
-const Chandelier = ({ scale = 1, y = 0 }: { scale?: number, y?: number }) => (
+const Chandelier = ({ scale = 1, y = 0, delay = 0 }: { scale?: number, y?: number, delay?: number }) => (
   <svg viewBox="0 0 200 300" style={{ width: `${200 * scale}px`, height: `${300 * scale}px`, transform: `translateY(${y}px)`, filter: 'drop-shadow(0 0 15px rgba(240, 198, 116, 0.2))' }}>
     <line x1="100" y1="0" x2="100" y2="80" stroke="#c7a252" strokeWidth="4" strokeDasharray="6,2"/>
     <path d="M 80 80 L 120 80 L 110 130 L 90 130 Z" fill="#b8860b" stroke="#f0c674" strokeWidth="2" />
-    <g className="flickering-light" style={{ animationDelay: '0s' }}>
+    <g className="flickering-light" style={{ animationDelay: `${-delay}s` }}>
       <circle cx="100" cy="150" r="15" fill="#ffd700" filter="blur(3px)" />
       <circle cx="100" cy="150" r="8" fill="#fff" />
     </g>
@@ -131,7 +131,7 @@ const Chandelier = ({ scale = 1, y = 0 }: { scale?: number, y?: number }) => (
     <path d="M 90 100 C 60 110, 60 140, 60 180" fill="none" stroke="#b8860b" strokeWidth="4" strokeLinecap="round" />
     <path d="M 110 100 C 140 110, 140 140, 140 180" fill="none" stroke="#b8860b" strokeWidth="4" strokeLinecap="round" />
     {[30, 60, 140, 170].map((x, i) => (
-      <g key={i} className="flickering-light" style={{ animationDelay: `${i * 0.8}s` }}>
+      <g key={i} className="flickering-light" style={{ animationDelay: `${-(delay + (i + 1) * 0.7)}s` }}>
         <rect x={x - 5} y={i < 2 ? 160 : 170} width="10" height="20" fill="#fdf5e6" />
         <circle cx={x} cy={i < 2 ? 155 : 165} r="8" fill="#ffeb3b" filter="blur(3px)" />
         <circle cx={x} cy={i < 2 ? 155 : 165} r="4" fill="#fff" />
@@ -246,11 +246,15 @@ export function MenuBackground() {
 
           /* АНИМАЦИЯ МЕРЦАНИЯ СВЕТА */
           @keyframes lightFlicker {
-            0% { opacity: 0.8; filter: brightness(0.9); }
-            50% { opacity: 1; filter: brightness(1.2); }
-            100% { opacity: 0.8; filter: brightness(0.9); }
+            0%, 100% { opacity: 0.83; }
+            28% { opacity: 1; }
+            51% { opacity: 0.88; }
+            73% { opacity: 0.97; }
           }
-          .flickering-light { animation: lightFlicker 5s infinite ease-in-out; }
+          .flickering-light { animation: lightFlicker 4.6s infinite ease-in-out; }
+          @media (prefers-reduced-motion: reduce) {
+            .flickering-light { animation: none; }
+          }
 
           /* АНИМАЦИЯ ДЫМА */
           @keyframes smokeRise {
@@ -445,8 +449,8 @@ export function MenuBackground() {
 
       <div className="casino-stage">
         <div className="chandelier-pos-1"><Chandelier scale={0.8} /></div>
-        <div className="chandelier-pos-2"><Chandelier scale={1} /></div>
-        <div className="chandelier-pos-3"><Chandelier scale={1} /></div>
+        <div className="chandelier-pos-2"><Chandelier delay={1.3} /></div>
+        <div className="chandelier-pos-3"><Chandelier delay={2.6} /></div>
 
         <div className="croupier-left"><Croupier color="#d32f2f" side="left" /></div>
         <div className="croupier-right"><Croupier color="#2e7d32" side="right" /></div>
