@@ -35,6 +35,18 @@ test('HTTP authorization, friends, room capacity, invitations and reconnect', {t
   const sockets=await Promise.all(users.map(u=>connect(u.token)));
   try {
     const [sa,sb,sc,sd,se]=sockets;
+    const chatWithA = '/api/friends/chat/' + a.username;
+    const chatWithB = '/api/friends/chat/' + b.username;
+    assert.equal((await call(chatWithA, undefined, e.token)).status, 403);
+    assert.equal((await call(chatWithA, {text:'Недоступно'}, e.token)).status, 403);
+    assert.equal((await call(chatWithB, {text:'  '}, a.token)).status, 400);
+    const incoming = waitFor(sb, 'friend_message');
+    const sent = await call(chatWithB, {text:'Привет!'}, a.token);
+    assert.equal(sent.status, 201);
+    assert.deepEqual(await incoming, sent.data.message);
+    assert.deepEqual((await call(chatWithA, undefined, b.token)).data.messages, [sent.data.message]);
+    assert.deepEqual((await call(chatWithA + '?before=' + sent.data.message.id, undefined, b.token)).data.messages, []);
+
     assert((await ack(sa,'create_dev_room')).error);
     const room=(await ack(sa,'create_room','2v2')).roomId;assert(room);
     const roomId = room;

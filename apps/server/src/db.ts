@@ -39,6 +39,14 @@ export const db = {
       await client.query('CREATE TABLE IF NOT EXISTS settled_matches (match_id TEXT PRIMARY KEY, created_at TIMESTAMPTZ NOT NULL DEFAULT now())');
       await client.query(`CREATE TABLE IF NOT EXISTS match_history (match_id TEXT NOT NULL REFERENCES settled_matches(match_id), username TEXT NOT NULL, won BOOLEAN NOT NULL, opponents JSONB NOT NULL DEFAULT '[]'::jsonb, finished_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (match_id, username))`);
       await client.query('CREATE INDEX IF NOT EXISTS match_history_user_date_idx ON match_history(username, finished_at DESC)');
+      await client.query(`CREATE TABLE IF NOT EXISTS friend_messages (
+        id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        sender TEXT NOT NULL REFERENCES users(username),
+        recipient TEXT NOT NULL REFERENCES users(username),
+        body TEXT NOT NULL CHECK (char_length(body) BETWEEN 1 AND 1000),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`);
+      await client.query('CREATE INDEX IF NOT EXISTS friend_messages_dialog_idx ON friend_messages(sender, recipient, id DESC)');
       await client.query(`UPDATE users SET rating=0 WHERE rating=1000 AND xp=0
         AND NOT EXISTS (SELECT 1 FROM match_history WHERE match_history.username=users.username)`);
     });
@@ -79,6 +87,31 @@ export const db = {
       for (const u of [user,target]) await client.query('UPDATE users SET friends=$2,friendrequests=$3 WHERE id=$1',[u.id,JSON.stringify(u.friends),JSON.stringify(u.friendRequests)]);
       return null;
     });
+  },
+  async getFriendMessages(username: string, friend: string, before: number | null) {
+    const result = await pool.query(`
+      SELECT COALESCE((
+        SELECT json_agg(messages ORDER BY messages.id ASC)
+        FROM (
+          SELECT id, sender, recipient, body, created_at AS "createdAt"
+          FROM friend_messages
+          WHERE ((sender = $1 AND recipient = $2) OR (sender = $2 AND recipient = $1))
+            AND ($3::integer IS NULL OR id < $3)
+          ORDER BY id DESC LIMIT 50
+        ) AS messages
+      ), '[]'::json) AS messages
+      FROM users WHERE username = $1 AND friends ? $2
+    `, [username, friend, before]);
+    const messages = result.rows[0]?.messages as { id: number; sender: string; recipient: string; body: string; createdAt: string }[] | undefined;
+    return messages?.map(message => ({ ...message, createdAt: new Date(message.createdAt).toISOString() }));
+  },
+  async sendFriendMessage(username: string, friend: string, body: string) {
+    const result = await pool.query(`
+      INSERT INTO friend_messages (sender, recipient, body)
+      SELECT username, $2, $3 FROM users WHERE username = $1 AND friends ? $2
+      RETURNING id, sender, recipient, body, created_at AS "createdAt"
+    `, [username, friend, body]);
+    return result.rows[0];
   },
   async getLeaderboard(limit = 50) {
     const rows = (await pool.query(`SELECT id, username, fullname, avatar, wins, losses, rating, xp FROM users ORDER BY rating DESC, wins DESC, id ASC LIMIT $1`, [Math.min(100, Math.max(1, Math.trunc(limit)))] )).rows;

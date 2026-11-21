@@ -170,6 +170,35 @@ async function main() {
     return { friends: users.filter(x=>u.friends?.includes(x.username)).map(publicUser), requests: users.filter(x=>u.friendRequests?.includes(x.username)).map(x=>({username:x.username,fullname:x.fullname,avatar:x.avatar,isAdmin:isAdminId(x.id)})) };
   });
 
+  app.get<{ Params: { friend: string }; Querystring: { before?: string } }>(
+    '/api/friends/chat/:friend', async (req, reply) => {
+      const before = req.query.before === undefined ? null : Number(req.query.before);
+      if (before !== null && (!Number.isInteger(before) || before < 1 || before > 2147483647)) {
+        return reply.code(400).send({ error: 'Некорректный номер сообщения' });
+      }
+      const messages = await db.getFriendMessages((req as any).identity.username, req.params.friend, before);
+      if (!messages) return reply.code(403).send({ error: 'Переписка доступна только между друзьями' });
+      return { messages };
+    }
+  );
+
+  app.post<{ Params: { friend: string }; Body: { text?: unknown } }>(
+    '/api/friends/chat/:friend', async (req, reply) => {
+      const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
+      if (!text || text.length > 1000) {
+        return reply.code(400).send({ error: 'Сообщение должно содержать от 1 до 1000 символов' });
+      }
+      const username = (req as any).identity.username;
+      const message = await db.sendFriendMessage(username, req.params.friend, text);
+      if (!message) return reply.code(403).send({ error: 'Переписка доступна только между друзьями' });
+      for (const name of [username, req.params.friend]) {
+        const socketId = onlineUsers.get(name);
+        if (socketId) io.to(socketId).emit('friend_message', message);
+      }
+      return reply.code(201).send({ message });
+    }
+  );
+
   const io = new Server(app.server, { cors: { origin: origins }, maxHttpBufferSize: 64 * 1024, allowRequest: (req, cb) => cb(null, !req.headers.origin || origins.includes(req.headers.origin)) });
 
   io.use(async (socket, next) => {
