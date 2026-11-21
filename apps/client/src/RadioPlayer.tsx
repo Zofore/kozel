@@ -3,12 +3,12 @@ import './radio.css';
 
 type Station = { id: string; name: string; url: string };
 
-// URLs are supplied by the operator at build time, never by untrusted chat users.
+// Operators can override the default public streams at build time.
 const configured: Station[] = [
   { id: 'kozel', name: 'Козёл FM', url: import.meta.env.VITE_KOZEL_FM_URL || '' },
-  { id: 'russkoe', name: 'Русское Радио', url: import.meta.env.VITE_RADIO_RUSSKOE_URL || '' },
-  { id: 'europa', name: 'Европа Плюс', url: import.meta.env.VITE_RADIO_EUROPA_URL || '' },
-  { id: 'avto', name: 'Авторадио', url: import.meta.env.VITE_RADIO_AVTO_URL || '' },
+  { id: 'russkoe', name: 'Русское Радио', url: import.meta.env.VITE_RADIO_RUSSKOE_URL ?? 'https://rusradio.hostingradio.ru/rusradio96.aacp' },
+  { id: 'europa', name: 'Европа Плюс', url: import.meta.env.VITE_RADIO_EUROPA_URL ?? 'https://europaplus.hostingradio.ru:8030/ep128' },
+  { id: 'avto', name: 'Авторадио', url: import.meta.env.VITE_RADIO_AVTO_URL ?? 'https://a2.radioheart.ru:8015/relay' },
   { id: 'retro', name: 'Ретро FM', url: import.meta.env.VITE_RADIO_RETRO_URL || '' },
   { id: 'energy', name: 'Радио ENERGY', url: import.meta.env.VITE_RADIO_ENERGY_URL || '' },
   { id: 'nashe', name: 'Наше Радио', url: import.meta.env.VITE_RADIO_NASHE_URL || '' },
