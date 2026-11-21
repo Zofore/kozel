@@ -290,16 +290,19 @@ const CardView = memo(({ card, onClick, selected, small, faceDown, className, is
   );
 });
 
-const Dice = ({ value, rolling }: { value: number, rolling: boolean }) => {
-  const [rotation, setRotation] = useState('rotateX(0) rotateY(0)');
+const DICE_ROLL_MS = 1500;
+const diceFaces = [
+  { value: 1, x: 0, y: 0 },
+  { value: 2, x: -90, y: 0 },
+  { value: 3, x: 0, y: 90 },
+  { value: 4, x: 0, y: -90 },
+  { value: 5, x: 90, y: 0 },
+  { value: 6, x: 0, y: 180 },
+];
+const diceRotation = (x: number, y: number) => `rotateX(${x}deg) rotateY(${y}deg)`;
 
-  useEffect(() => {
-    if (rolling) setRotation('rotateX(1080deg) rotateY(1080deg)');
-    else {
-      const final: Record<number, string> = { 1: 'rotateX(0) rotateY(0)', 2: 'rotateX(-90deg) rotateY(0)', 3: 'rotateX(0) rotateY(-90deg)', 4: 'rotateX(0) rotateY(90deg)', 5: 'rotateX(90deg) rotateY(0)', 6: 'rotateX(180deg) rotateY(0)' };
-      setRotation(final[value] || 'rotateX(0) rotateY(0)');
-    }
-  }, [rolling, value]);
+const Dice = ({ value, rolling }: { value: number, rolling: boolean }) => {
+  const { x, y } = diceFaces[value - 1] ?? diceFaces[0];
 
   const face = (t: string) => ({ position: 'absolute' as const, width: '100%', height: '100%', background: 'linear-gradient(135deg, #fff, #e0e0e0)', border: '2px solid #ccc', borderRadius: '15px', boxShadow: 'inset 0 0 15px rgba(0,0,0,0.1)', transform: t, display: 'flex', justifyContent: 'center', alignItems: 'center', backfaceVisibility: 'hidden' as const });
 
@@ -312,8 +315,15 @@ const Dice = ({ value, rolling }: { value: number, rolling: boolean }) => {
 
   return (
     <div style={{ perspective: '1000px', width: '80px', height: '80px', margin: '0 10px' }}>
-      <div style={{ width: '100%', height: '100%', position: 'relative', transformStyle: 'preserve-3d', transform: rotation, transition: rolling ? 'transform 2s ease-in-out' : 'transform 1s cubic-bezier(0.175, 0.885, 0.32, 1.275)' }}>
-        <div style={face('translateZ(40px)')}><Dots c={1} /></div><div style={face('rotateY(180deg) translateZ(40px)')}><Dots c={6} /></div><div style={face('rotateY(90deg) translateZ(40px)')}><Dots c={3} /></div><div style={face('rotateY(-90deg) translateZ(40px)')}><Dots c={4} /></div><div style={face('rotateX(90deg) translateZ(40px)')}><Dots c={5} /></div><div style={face('rotateX(-90deg) translateZ(40px)')}><Dots c={2} /></div>
+      <div style={{
+        width: '100%', height: '100%', position: 'relative', transformStyle: 'preserve-3d',
+        transform: diceRotation(-x, -y),
+        '--dice-roll-end': diceRotation(1080 - x, 1080 - y),
+        animation: rolling ? `dice-roll-to-face ${DICE_ROLL_MS}ms ease-out both` : undefined,
+      } as React.CSSProperties}>
+        {diceFaces.map(({ value: dots, x, y }) => (
+          <div key={dots} style={face(`${diceRotation(x, y)} translateZ(40px)`)}><Dots c={dots} /></div>
+        ))}
       </div>
     </div>
   );
@@ -321,7 +331,7 @@ const Dice = ({ value, rolling }: { value: number, rolling: boolean }) => {
 
 const DiceRollScreen = ({ gameState }: { gameState: any }) => {
   const [rolling, setRolling] = useState(true);
-  useEffect(() => { setRolling(true); playSound('dice'); const timer = setTimeout(() => setRolling(false), 1500); return () => clearTimeout(timer); }, [gameState.diceRolls]);
+  useEffect(() => { setRolling(true); playSound('dice'); const timer = setTimeout(() => setRolling(false), DICE_ROLL_MS); return () => clearTimeout(timer); }, [gameState.diceRolls]);
   if (!gameState.diceRolls) return <div style={{ color: 'white', fontSize: 24 }}>Подготовка к броску...</div>;
   const rolls = Object.values(gameState.diceRolls) as number[];
   const maxRoll = Math.max(...rolls);
@@ -329,7 +339,12 @@ const DiceRollScreen = ({ gameState }: { gameState: any }) => {
 
   return (
     <div className="mobile-dice-screen" style={{ position: 'fixed', inset: 0, background: 'radial-gradient(circle at center, #1e3a2a 0%, #0d1b14 100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-      <style>{floatingEmojiStyle}</style>
+      <style>{`${floatingEmojiStyle}
+        @keyframes dice-roll-to-face {
+          from { transform: rotateX(0deg) rotateY(0deg); }
+          to { transform: var(--dice-roll-end); }
+        }`
+      }</style>
       <h1 style={{ color: '#f0c674', fontSize: 48, marginBottom: 40, textShadow: '0 4px 10px rgba(0,0,0,0.5)' }}>{rolling ? 'Бросок костей...' : 'Кости брошены!'}</h1>
       <div className="mobile-dice-grid" style={{ display: 'flex', gap: 40, marginBottom: 50 }}>
         {gameState.players.map((p: any) => (
@@ -337,7 +352,7 @@ const DiceRollScreen = ({ gameState }: { gameState: any }) => {
             <div className={p.isAdmin ? 'dev-avatar-frame' : ''} style={{ marginBottom: 10 }}><img src={getAvatar(p.name)} style={{ width: 60, height: 60, borderRadius: '50%', background: '#fff', border: p.isAdmin ? 'none' : '2px solid #f0c674' }} /></div>
             <div style={{ marginBottom: 15, display: 'flex', alignItems: 'center', gap: 5 }}>{p.isAdmin && <span>👑</span>}<span className={p.isAdmin ? 'dev-nick' : ''} style={{ color: p.isAdmin ? undefined : 'white', fontWeight: 'bold' }}>{p.name}</span></div>
             <Dice value={gameState.diceRolls[p.id]} rolling={rolling} />
-            <div style={{ marginTop: 15, fontSize: 20, fontWeight: 'bold', color: gameState.diceRolls[p.id] === maxRoll ? '#4caf50' : '#aaa' }}>{gameState.diceRolls[p.id]}</div>
+            <div style={{ marginTop: 15, fontSize: 20, fontWeight: 'bold', color: gameState.diceRolls[p.id] === maxRoll ? '#4caf50' : '#aaa' }}>{rolling ? '…' : gameState.diceRolls[p.id]}</div>
           </div>
         ))}
       </div>
