@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { Auth } from './Auth';
 import { Menu } from './Menu';
@@ -129,9 +129,8 @@ export function App() {
       if (res.ok) { const me = await res.json(); if(active) setUser((prev:any) => prev ? {...prev,...me} : prev); }
     }).catch(()=>{});
     const onConnectError = (err: Error) => { if (/токен|авторизац/i.test(err.message)) handleLogout(); };
-    const onDisconnect = (reason:string) => { if(reason==='io server disconnect') handleLogout(); };
-    socket.on('connect_error',onConnectError); socket.on('disconnect',onDisconnect);
-    return () => { active=false; socket.off('connect_error',onConnectError); socket.off('disconnect',onDisconnect); };
+    socket.on('connect_error',onConnectError);
+    return () => { active=false; socket.off('connect_error',onConnectError); };
   }, [user?.username]);
   useEffect(() => {
     const handleReceiveInvite = ({ from, roomId }: { from: string, roomId: string }) => {
@@ -244,11 +243,20 @@ export function App() {
     });
   };
 
-  // Сохраняем возможность вернуться только в незавершённую игру.
-  const handleExitToLobby = (finalState?: any) => {
-    const resumable = roomId && !/^(DEV|BOT)-/.test(roomId) && finalState && !['waiting','finished'].includes(finalState.phase);
-    setResumeRoomId(resumable ? roomId : null);
-    if (roomId) socket.emit('leave_room',roomId);
+  const handleInterruption = useCallback(() => {
+    if (!roomId) return;
+    localStorage.setItem('kozel_resume_room', roomId);
+    localStorage.removeItem('kozel_room');
+    setResumeRoomId(roomId);
+    setRoomId(null);
+    setView('menu');
+  }, [roomId]);
+
+  const handleExitToLobby = () => {
+    localStorage.removeItem('kozel_resume_room');
+    localStorage.removeItem('kozel_room');
+    setResumeRoomId(null);
+    if (roomId) socket.emit('leave_room', roomId);
     setRoomId(null);
     setView('menu');
 
@@ -284,11 +292,10 @@ export function App() {
 
   const handleResume = () => {
     if (!resumeRoomId) return;
-    if (!socket.connected) { showToast('Нет соединения с сервером', 'error'); return; }
+    if (!socket.connected) socket.connect();
     socket.timeout(5000).emit('join_room', resumeRoomId, (error: any, response: any) => {
       if (error || response?.error) {
-        setResumeRoomId(null);
-        showToast(response?.error || 'Партия больше недоступна', 'error');
+        showToast(error ? 'Сервер не ответил. Попробуй ещё раз' : response.error, 'error');
         return;
       }
       setRoomId(resumeRoomId);
@@ -300,7 +307,7 @@ export function App() {
 
   let content;
   if (roomId) {
-    content = <Game key={roomId} socket={socket} roomId={roomId} setRoomId={setRoomId} username={user.username} isAdmin={isDev} openDevConsole={() => setDevConsoleOpen(true)} onExit={handleExitToLobby} onRematch={handleRematch} />;
+    content = <Game key={roomId} socket={socket} roomId={roomId} onInterruption={handleInterruption} username={user.username} isAdmin={isDev} openDevConsole={() => setDevConsoleOpen(true)} onExit={handleExitToLobby} onRematch={handleRematch} />;
   }
   else if (view === 'profile') content = <ProfileSettings user={user} onSave={updateProfile} onBack={() => setView('menu')} />;
   else if (view === 'friends') content = <Friends socket={socket} user={user} onRoom={setRoomId} onBack={() => setView('menu')} showToast={showToast} />;
