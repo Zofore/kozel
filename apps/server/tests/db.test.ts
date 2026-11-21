@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import pg from 'pg';
 
 // Deliberately refuse to touch a production database.
 const url = process.env.KOZEL_TEST_DATABASE_URL;
@@ -19,6 +20,7 @@ test('registration, profile, friends and idempotent match stats using PostgreSQL
     assert(duplicate.every(x=>x.status==='rejected'));
     const accounts = await Promise.all(names.map(n=>db.getUser(n)));
     assert.equal(new Set(accounts.map(a=>a?.id)).size,4);
+    assert(accounts.every(account => account?.rating === 0));
     assert.equal(await db.updateProfile(names[0],'ready',''),true);
     assert.equal((await db.getUser(names[0]))?.status,'ready');
     assert.equal(await db.friends(names[1],names[0],'accept'),'Заявка не найдена');
@@ -32,11 +34,23 @@ test('registration, profile, friends and idempotent match stats using PostgreSQL
     for(let i=0;i<4;i++) {const u=await db.getUser(names[i]);assert.equal(u?.wins,i%2===0?1:0);assert.equal(u?.losses,i%2===0?0:1);}
     for(let i=0;i<4;i++) {
       const u=await db.getUser(names[i]);
-      assert.equal(u?.rating, i%2===0 ? 1020 : 985);
+      assert.equal(u?.rating, i%2===0 ? 20 : 0);
       assert.equal(u?.xp, i%2===0 ? 100 : 35);
     }
-    const board=await db.getLeaderboard(100);
-    assert(board.some(p=>p.username===names[0] && p.rating===1020));
+    const legacy = `test-${randomUUID()}`;
+    await db.register(legacy, 'test-hash', 'Test user', 'test@example.invalid');
+    const legacyPool = new pg.Pool({ connectionString: url, ssl: false });
+    try {
+      await legacyPool.query('UPDATE users SET rating=1000 WHERE username=ANY($1::text[])', [[legacy, names[2]]]);
+      await db.init();
+      assert.equal((await db.getUser(legacy))?.rating, 0);
+      assert.equal((await db.getUser(names[2]))?.rating, 1000);
+      assert.equal((await db.getUser(names[0]))?.rating, 20);
+    } finally {
+      await legacyPool.end();
+    }
+    const board = await db.getLeaderboard(100);
+    assert(board.every((player, index) => index === 0 || player.rating <= board[index - 1].rating));
     const history = await db.getMatchHistory(names[0]);
     const recorded = history.filter(h=>h.matchId===match);
     assert.equal(recorded.length,1, 'duplicate settle must not duplicate history');

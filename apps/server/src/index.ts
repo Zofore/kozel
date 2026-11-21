@@ -41,7 +41,7 @@ const playerProgress = (u: any) => {
   const wins = Number(u.wins || 0);
   const losses = Number(u.losses || 0);
   const xp = Number(u.xp || 0);
-  const rating = Number(u.rating ?? 1000);
+  const rating = Number(u.rating ?? 0);
   return { xp, rating, level: Math.floor(xp / 500) + 1, league: rating >= 1800 ? 'Алмаз' : rating >= 1500 ? 'Платина' : rating >= 1300 ? 'Золото' : rating >= 1100 ? 'Серебро' : 'Бронза', achievements: [
     ...(wins >= 1 ? ['first_win'] : []),
     ...(wins >= 10 ? ['ten_wins'] : []),

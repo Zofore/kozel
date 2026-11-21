@@ -185,7 +185,7 @@ export function Menu({ socket, user, onPlay, onProfile, onFriends, onLogout, onR
         </div>
 
         <div style={{ color:'#f0c674', fontSize:isMobile ? 13 : 14, marginBottom:10 }}>
-          {user.league || 'Бронза'} · Рейтинг {user.rating ?? 1000} · Уровень {user.level ?? 1} · XP {user.xp ?? 0}
+          {user.league || 'Бронза'} · Рейтинг {user.rating ?? 0} · Уровень {user.level ?? 1} · XP {user.xp ?? 0}
         </div>
         <div style={{fontSize:12, color:'#ccc', marginBottom:10}}>
           {(user.achievements || []).includes('first_win') && <span title="Первая победа" style={{marginRight:8}}>🥇 Первая победа</span>}
