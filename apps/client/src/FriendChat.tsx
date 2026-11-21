@@ -2,11 +2,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { Socket } from 'socket.io-client';
 import { API_URL, checkedJson } from './api';
 
-type Message = { id: number; sender: string; recipient: string; body: string; createdAt: string };
+export type Message = { id: number; sender: string; recipient: string; body: string; createdAt: string };
+export type ChatFriend = { username: string; fullname: string };
+
 type Props = {
   socket: Socket;
   username: string;
-  friend: { username: string; fullname: string };
+  friend: ChatFriend;
   onBack: () => void;
 };
 
