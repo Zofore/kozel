@@ -3,7 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import { Auth } from './Auth';
 import { Menu } from './Menu';
 import { Lobby } from './Lobby';
-import { Game } from './Game';
+import { Game, playSound, unlockGameAudio } from './Game';
 import { ProfileSettings } from './ProfileSettings';
 import { Friends } from './Friends';
 import { MenuBackground } from './MenuBackground';
@@ -81,6 +81,9 @@ export function App() {
   
   const [roomId, setRoomId] = useState<string | null>(() => localStorage.getItem('kozel_room'));
   const [resumeRoomId, setResumeRoomId] = useState<string | null>(() => localStorage.getItem('kozel_resume_room'));
+  const [waitingRoomId, setWaitingRoomId] = useState<string | null>(null);
+  const [chatFriend, setChatFriend] = useState<{ username: string; fullname: string } | null>(null);
+  const radioSuspended = Boolean(roomId && roomId !== waitingRoomId);
   const [view, setView] = useState<'menu' | 'lobby' | 'profile' | 'friends'>('menu');
   
   const [friendRequestToast, setFriendRequestToast] = useState<string | null>(null);
@@ -183,6 +186,32 @@ export function App() {
     };
   }, [isDev]);
 
+  const username = user?.username;
+  const activeChat = !roomId && view === 'friends' ? chatFriend?.username : undefined;
+
+  useEffect(() => {
+    if (!username) return;
+    window.addEventListener('pointerup', unlockGameAudio, { once: true });
+    window.addEventListener('keydown', unlockGameAudio, { once: true });
+    return () => {
+      window.removeEventListener('pointerup', unlockGameAudio);
+      window.removeEventListener('keydown', unlockGameAudio);
+    };
+  }, [username]);
+
+  useEffect(() => {
+    if (!username || roomId) return;
+    const receive = (message: { sender: string; recipient: string }) => {
+      if (message.recipient !== username || message.sender === username || message.sender === activeChat) return;
+      setGenericToast({ msg: `Новое сообщение от @${message.sender}`, type: 'info' });
+      if (genericToastTimer.current) clearTimeout(genericToastTimer.current);
+      genericToastTimer.current = setTimeout(() => setGenericToast(null), 5000);
+      playSound('chat');
+    };
+    socket.on('friend_message', receive);
+    return () => { socket.off('friend_message', receive); };
+  }, [username, roomId, activeChat]);
+
   const acceptInvite = () => {
     if (!inviteModal) return;
     socket.timeout(5000).emit('accept_invite', { roomId: inviteModal.roomId }, (err: any,res:any) => {
@@ -214,6 +243,10 @@ export function App() {
     ['kozel_user','kozel_token','kozel_room','kozel_resume_room'].forEach(key=>localStorage.removeItem(key));
     socket.disconnect(); socket.auth={};
     setUser(null);
+    setWaitingRoomId(null);
+    setChatFriend(null);
+    setGenericToast(null);
+    if (genericToastTimer.current) clearTimeout(genericToastTimer.current);
     setRoomId(null);
     setResumeRoomId(null);
     setView('menu');
@@ -306,10 +339,10 @@ export function App() {
 
   let content;
   if (roomId) {
-    content = <Game key={roomId} socket={socket} roomId={roomId} onInterruption={handleInterruption} username={user.username} isAdmin={isDev} openDevConsole={() => setDevConsoleOpen(true)} onExit={handleExitToLobby} onRematch={handleRematch} />;
+    content = <Game key={roomId} onWaitingRoom={setWaitingRoomId} socket={socket} roomId={roomId} onInterruption={handleInterruption} username={user.username} isAdmin={isDev} openDevConsole={() => setDevConsoleOpen(true)} onExit={handleExitToLobby} onRematch={handleRematch} />;
   }
   else if (view === 'profile') content = <ProfileSettings user={user} onSave={updateProfile} onBack={() => setView('menu')} />;
-  else if (view === 'friends') content = <Friends socket={socket} user={user} onRoom={setRoomId} onBack={() => setView('menu')} showToast={showToast} />;
+  else if (view === 'friends') content = <Friends socket={socket} user={user} onRoom={setRoomId} onBack={() => setView('menu')} showToast={showToast} chatFriend={chatFriend} setChatFriend={setChatFriend} />;
   else if (view === 'lobby') content = <Lobby socket={socket} setRoomId={setRoomId} username={user.username} onBack={() => setView('menu')} />;
   else content = <Menu socket={socket} user={user} onPlay={() => setView('lobby')} onProfile={() => setView('profile')} onFriends={() => setView('friends')} onLogout={handleLogout} onResume={handleResume} canResume={Boolean(resumeRoomId)} />;
 
@@ -317,10 +350,9 @@ export function App() {
     <>
       <style>{toastStyles}</style>
       
-      <div className={roomId ? "app-toolbar app-toolbar-in-game" : "app-toolbar"}>
+      <div className={radioSuspended ? "app-toolbar app-toolbar-in-game" : "app-toolbar"}>
         <MenuBackground />
-        {/* Only pre-game: unmounting stops audio before a match begins. */}
-        {!roomId && (view === 'menu' || view === 'lobby') && <RadioPlayer />}
+        <RadioPlayer suspended={radioSuspended} />
 
         {isDev && !roomId && (
           <>
@@ -371,7 +403,7 @@ export function App() {
         )}
 
         {genericToast && (
-          <div className={`cloud-toast toast-${genericToast.type}`}>
+          <div className={`cloud-toast toast-${genericToast.type}`} role="status">
             <div style={{ fontSize: 24 }}>{genericToast.type === 'success' ? '✅' : genericToast.type === 'error' ? '❌' : 'ℹ️'}</div>
             <div style={{ fontWeight: 'bold' }}>{genericToast.msg}</div>
             <div style={{ fontSize: 20, color: '#aaa', marginLeft: 'auto', cursor: 'pointer' }} onClick={() => setGenericToast(null)}>✖</div>

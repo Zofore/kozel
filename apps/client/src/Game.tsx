@@ -22,11 +22,18 @@ const translateError = (err: string) => {
 
 let globalAudioCtx: AudioContext | null = null;
 
-const playSound = (type: 'card' | 'deal' | 'chat' | 'trump' | 'win' | 'lose' | 'click' | 'pop' | 'dice' | 'rain' | 'dev_join' | 'secret' | 'gold' | 'reverse') => {
+export function unlockGameAudio() {
   try {
     if (!globalAudioCtx) globalAudioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    if (globalAudioCtx.state === 'suspended') globalAudioCtx.resume();
+    if (globalAudioCtx?.state === 'suspended') void globalAudioCtx.resume().catch(() => {});
+  } catch { /* Audio is optional. */ }
+}
+
+export const playSound = (type: 'card' | 'deal' | 'chat' | 'trump' | 'win' | 'lose' | 'click' | 'pop' | 'dice' | 'rain' | 'dev_join' | 'secret' | 'gold' | 'reverse') => {
+  try {
+    unlockGameAudio();
     const ctx = globalAudioCtx;
+    if (!ctx || (type === 'chat' && ctx.state !== 'running')) return;
 
     const playTone = (freq: number, type: OscillatorType, duration: number, volume: number, delay = 0) => {
       const osc = ctx.createOscillator();
@@ -363,7 +370,7 @@ const DiceRollScreen = ({ gameState }: { gameState: any }) => {
   );
 };
 
-export function Game({ socket, roomId, onInterruption, username, isAdmin = false, openDevConsole, onExit, onRematch }: { socket: Socket, roomId: string, setRoomId: any, username: string, isAdmin?: boolean, openDevConsole?: () => void, onExit: () => void, onRematch?: (opponent: string) => void }) {
+export function Game({ socket, roomId, onInterruption, username, isAdmin = false, openDevConsole, onExit, onRematch, onWaitingRoom }: { socket: Socket, roomId: string, onInterruption: () => void, onWaitingRoom: (roomId: string | null) => void, username: string, isAdmin?: boolean, openDevConsole?: () => void, onExit: () => void, onRematch?: (opponent: string) => void }) {
   const [gameState, setGameState] = useState<any>(null);
   const [selectedCards, setSelectedCards] = useState<any[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -433,6 +440,7 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
           }
         }
       }
+      onWaitingRoom(state.roundNumber === 0 && state.phase !== 'dice-roll' ? roomId : null);
       prevState.current = state;
       setGameState(state); 
       setSelectedCards([]); 
@@ -480,11 +488,10 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
       socket.off('disconnect', onDisconnect);
       socket.off('game_state', onState); socket.off('error', onError); socket.off('chat_message', onChatMessage); socket.off('reaction', onReaction); socket.off('kicked', onKicked); socket.off('admin_rain', onAdminRain); socket.off('dev_joined', onDevJoined); socket.off('admin_secret_fx', onAdminSecretFx); socket.off('admin_gold', onAdminGold); socket.off('admin_reverse', onAdminReverse);
     };
-  }, [socket, roomId, username, onInterruption]);
+  }, [socket, roomId, username, onInterruption, onWaitingRoom]);
 
   const sendMessage = (e: React.FormEvent) => { e.preventDefault(); if (!chatInput.trim()) return; socket.emit('chat_message', { roomId, sender: username, text: chatInput.trim() }); setChatInput(''); };
   const sendEmoji = (emoji: string) => { socket.emit('send_reaction', { roomId, emoji, sender: username }); setEmojiPickerOpen(false); };
-  const unlockAudio = () => { if (!globalAudioCtx) globalAudioCtx = new (window.AudioContext || (window as any).webkitAudioContext)(); if (globalAudioCtx.state === 'suspended') globalAudioCtx.resume(); };
 
   if (!gameState) return <div style={{ padding: 20, color: 'white', textAlign: 'center', fontSize: 24 }}>{errorMsg || 'Загрузка стола...'}<div><button onClick={onInterruption}>Выйти</button></div></div>;
 
@@ -537,7 +544,7 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
     return (
       <LayoutGroup>
         {voiceChat}
-        <div className="mobile-screen mobile-result" onClick={unlockAudio} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', background: isFinished ? (titleColor === '#ffd700' ? 'radial-gradient(circle, #2a2a10 0%, #0a0a05 100%)' : 'radial-gradient(circle, #2a1010 0%, #0a0505 100%)') : '#1a1a2e', position: 'relative', overflow: 'hidden' }}>
+        <div className="mobile-screen mobile-result" onClick={unlockGameAudio} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', background: isFinished ? (titleColor === '#ffd700' ? 'radial-gradient(circle, #2a2a10 0%, #0a0a05 100%)' : 'radial-gradient(circle, #2a1010 0%, #0a0505 100%)') : '#1a1a2e', position: 'relative', overflow: 'hidden' }}>
           <style>{floatingEmojiStyle}</style>
           {floatingEmojis.map(e => <div key={e.id} className="floating-emoji" style={{ left: `${e.left}%` }}>{e.emoji}</div>)}
           {rainEmojis.map(e => <div key={e.id} className="rain-emoji" style={{ left: `${e.left}%`, animationDuration: `${e.duration}s` }}>{e.emoji}</div>)}
@@ -598,7 +605,7 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
   return (
     <LayoutGroup>
       {voiceChat}
-      <div className="mobile-game" onClick={unlockAudio} style={{
+      <div className="mobile-game" onClick={unlockGameAudio} style={{
         display: 'flex', flexDirection: 'column', height: '100vh',
         background: '#1a1a2e', position: 'relative', overflow: 'hidden',
         transform: isReversed ? 'rotate(180deg)' : 'none',

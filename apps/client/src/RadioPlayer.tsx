@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import './radio.css';
 
 type Station = { id: string; name: string; url: string };
@@ -29,7 +29,7 @@ function safeStream(value: string): string {
 const stations = configured.map(station => ({ ...station, url: safeStream(station.url) }));
 const storagePrefix = 'kozel_radio_';
 
-export function RadioPlayer() {
+export function RadioPlayer({ suspended }: { suspended: boolean }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [stationId, setStationId] = useState(() => {
@@ -61,15 +61,34 @@ export function RadioPlayer() {
     if (audioRef.current) audioRef.current.volume = volume / 100;
   }, [volume]);
 
-  // React unmounts this component when the player enters a live match.
-  useEffect(() => () => {
+  useEffect(() => {
     const audio = audioRef.current;
-    if (audio) {
+    return () => {
+      if (!audio) return;
       audio.pause();
       audio.removeAttribute('src');
       audio.load();
-    }
+    };
   }, []);
+
+  useLayoutEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (suspended) {
+      audio.pause();
+      return;
+    }
+
+    if (!playing || !audio.paused) return;
+    let current = true;
+    void audio.play().catch(() => {
+      if (!current) return;
+      setPlaying(false);
+      setError('Эфир не возобновился. Нажми «Включить радио».');
+      setExpanded(true);
+    });
+    return () => { current = false; };
+  }, [suspended, playing]);
 
   async function togglePlayback() {
     const audio = audioRef.current;
@@ -88,9 +107,10 @@ export function RadioPlayer() {
     try {
       audio.src = selected.url;
       audio.volume = volume / 100;
-      await audio.play(); // Called only after the player's explicit click.
       setPlaying(true);
-    } catch {
+      await audio.play();
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
       setPlaying(false);
       setError('Не удалось воспроизвести эфир. Проверь адрес и формат трансляции.');
       setExpanded(true);
@@ -98,32 +118,34 @@ export function RadioPlayer() {
   }
 
   return (
-    <aside className="kozel-radio" aria-label="Радио до игры">
+    <>
       <audio
         ref={audioRef}
         preload="none"
         onEnded={() => setPlaying(false)}
         onError={() => { setPlaying(false); if (selected.url) setError('Поток недоступен или не поддерживается браузером.'); }}
       />
-      <div className="kozel-radio__bar">
-        <span className="kozel-radio__label">📻 {selected.name}</span>
-        <button type="button" className="kozel-radio__button" onClick={togglePlayback} aria-label={playing ? 'Остановить радио' : 'Включить радио'}>
-          {playing ? 'Ⅱ' : '▶'}
-        </button>
-        <button type="button" className="kozel-radio__button" onClick={() => setExpanded(current => !current)} aria-expanded={expanded} aria-label="Настройки радио">⚙</button>
-      </div>
-      {expanded && (
-        <div className="kozel-radio__settings">
-          <label htmlFor="kozel-radio-station">Радиостанция</label>
-          <select id="kozel-radio-station" value={stationId} onChange={event => setStationId(event.target.value)}>
-            {stations.map(station => <option key={station.id} value={station.id}>{station.name}{station.url ? '' : ' — не подключена'}</option>)}
-          </select>
-          <label htmlFor="kozel-radio-volume">Громкость: {volume}%</label>
-          <input id="kozel-radio-volume" type="range" min="0" max="100" step="5" value={volume} onChange={event => setVolume(Number(event.target.value))}/>
-          {error && <div className="kozel-radio__error" role="status">{error}</div>}
-          <div className="kozel-radio__hint">Радио доступно только до начала партии. Во время игры оно отключается.</div>
+      {!suspended && <aside className="kozel-radio" aria-label="Радио">
+        <div className="kozel-radio__bar">
+          <span className="kozel-radio__label">📻 {selected.name}</span>
+          <button type="button" className="kozel-radio__button" onClick={togglePlayback} aria-label={playing ? 'Остановить радио' : 'Включить радио'}>
+            {playing ? 'Ⅱ' : '▶'}
+          </button>
+          <button type="button" className="kozel-radio__button" onClick={() => setExpanded(current => !current)} aria-expanded={expanded} aria-label="Настройки радио">⚙</button>
         </div>
-      )}
-    </aside>
+        {expanded && (
+          <div className="kozel-radio__settings">
+            <label htmlFor="kozel-radio-station">Радиостанция</label>
+            <select id="kozel-radio-station" value={stationId} onChange={event => setStationId(event.target.value)}>
+              {stations.map(station => <option key={station.id} value={station.id}>{station.name}{station.url ? '' : ' — не подключена'}</option>)}
+            </select>
+            <label htmlFor="kozel-radio-volume">Громкость: {volume}%</label>
+            <input id="kozel-radio-volume" type="range" min="0" max="100" step="5" value={volume} onChange={event => setVolume(Number(event.target.value))}/>
+            {error && <div className="kozel-radio__error" role="status">{error}</div>}
+            <div className="kozel-radio__hint">Радио доступно только до начала партии. Во время игры оно отключается.</div>
+          </div>
+        )}
+      </aside>}
+    </>
   );
 }

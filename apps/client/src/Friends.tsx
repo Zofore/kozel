@@ -4,14 +4,15 @@ import { Socket } from 'socket.io-client';
 import { API_URL, apiFetch, checkedJson } from './api';
 import { FriendChat } from './FriendChat';
 
-export function Friends({ socket, user, onRoom, onBack, showToast }: { socket: Socket, user: any, onRoom: (id:string)=>void, onBack: () => void, showToast: (msg: string, type?: 'success' | 'error' | 'info') => void }) {
+type ChatFriend = { username: string; fullname: string };
+
+export function Friends({ socket, user, onRoom, onBack, showToast, chatFriend, setChatFriend }: { socket: Socket, user: any, onRoom: (id:string)=>void, onBack: () => void, showToast: (msg: string, type?: 'success' | 'error' | 'info') => void; chatFriend: ChatFriend | null; setChatFriend: (friend: ChatFriend | null) => void }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
   const [friends, setFriends] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
   const [refresh, setRefresh] = useState(0);
-  const [chatFriend, setChatFriend] = useState<{ username: string; fullname: string } | null>(null);
   const [friendToDelete, setFriendToDelete] = useState<string | null>(null);
 
   useEffect(() => {
