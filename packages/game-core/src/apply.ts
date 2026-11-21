@@ -1,7 +1,7 @@
 import { GameState, PlayerId, TrickState, Side } from './state';
 import { createDeck, shuffle, mulberry32 } from './deck';
 import { Card, cardEquals } from './card';
-import { canBeat } from './trick';
+import { canBeat, passCardCount } from './trick';
 import { validateSpecial } from './special';
 import { calculatePoints } from './scoring';
 
@@ -114,7 +114,7 @@ export function applyEvent(state: GameState, event: GameEvent): ApplyResult {
     if (!Array.isArray(event.cards)) return { ok: false, error: 'ILLEGAL_SET' };
     // The current UI explicitly permits the original attacker to close the trick with no cards.
     // Others discard the required number, or all remaining cards if fewer are available.
-    const count = Math.min(state.trick.required, state.players[event.player].hand.length);
+    const count = passCardCount(state.mode, state.trick, event.player, state.players[event.player].hand.length);
     if (event.cards.length !== count && !(event.player === state.trick.attacker && event.cards.length === 0)) return { ok: false, error: 'WRONG_COUNT' };
 
     const player = state.players[event.player];

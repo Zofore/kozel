@@ -42,3 +42,8 @@ export function canBeat(newCards: Card[], tableCards: Card[], trump: Suit): bool
 
   return match(0);
 }
+
+export function passCardCount(mode: '1v1' | '2v2', trick: { attacker: number; required: number }, player: number, handSize: number): number {
+  // In 1v1 the original attacker has already matched the opponent's contribution.
+  return mode === '1v1' && trick.attacker === player ? 0 : Math.min(trick.required, handSize);
+}

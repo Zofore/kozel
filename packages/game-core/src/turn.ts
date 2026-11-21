@@ -1,3 +1,4 @@
+import { passCardCount } from './trick';
 import { applyEvent, ApplyResult, GameEvent } from './apply';
 import { GameState } from './state';
 import { chooseBotMove, chooseBotDiscard, BotDifficulty } from './bot';
@@ -16,6 +17,6 @@ export function automaticTurn(state: GameState, preferBeat = false, difficulty?:
   if (move && (!state.trick || preferBeat)) {
     return applyTurn(state, { type: state.trick ? 'BEAT' : 'ATTACK', player, cards: move });
   }
-  if (state.trick) return applyTurn(state, { type: 'PASS', player, cards: difficulty ? chooseBotDiscard(state, difficulty) : state.players[player].hand.slice(0,state.trick.required) });
+  if (state.trick) return applyTurn(state, { type: 'PASS', player, cards: difficulty ? chooseBotDiscard(state, difficulty) : state.players[player].hand.slice(0, passCardCount(state.mode, state.trick, player, state.players[player].hand.length)) });
   return { ok: false, error: 'ILLEGAL_SET' };
 }

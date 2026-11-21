@@ -4,7 +4,6 @@ import { motion, LayoutGroup } from 'framer-motion';
 import { Goat3D } from './Goat3D';
 import { VoiceChat } from './VoiceChat';
 
-const SUIT_MAP: any = { '♠': 'S', '♥': 'H', '♦': 'D', '♣': 'C' };
 const getAvatar = (name: string) => `https://api.dicebear.com/7.x/adventurer/svg?seed=${name || 'default'}`;
 
 const translateError = (err: string) => {
@@ -244,10 +243,6 @@ const floatingEmojiStyle = `
 
 const CardView = memo(({ card, onClick, selected, small, faceDown, className, isDevCard, isLegal }: any) => {
   const isRed = card.suit === '♥' || card.suit === '♦';
-  const baseName = `${card.rank}_${SUIT_MAP[card.suit]}`;
-  const [imgSrc, setImgSrc] = useState(`/cards/${baseName}.jpg`);
-  const [showText, setShowText] = useState(false);
-  const handleError = () => { if (imgSrc.endsWith('.jpg')) setImgSrc(`/cards/${baseName}.png`); else setShowText(true); };
 
   const devCardStyle = isDevCard ? {
     background: 'linear-gradient(135deg, #111, #333)',
@@ -274,12 +269,9 @@ const CardView = memo(({ card, onClick, selected, small, faceDown, className, is
     }}>
       {!faceDown && (
         <>
-          {!showText && <img src={imgSrc} alt={card.rank} style={{ width: '100%', height: '100%', objectFit: 'fill', display: 'block' }} onError={handleError} />}
-          {showText && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', fontSize: small ? '18px' : '26px', fontWeight: '900', color: isRed ? '#d32f2f' : '#222' }}>
               <div>{card.rank}</div><div style={{ marginTop: '-5px' }}>{card.suit}</div>
             </div>
-          )}
         </>
       )}
       {faceDown && isDevCard && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#ffd700', fontSize: 24, fontWeight: 'bold' }}>DEV</div>}
@@ -599,7 +591,8 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
   const required = gameState.trick?.required || 1;
   const selectedIds = selectedCards.map(c=>`${c.rank}_${c.suit}`);
   const legalSelection = gameState.legalMoves?.some((move:string[]) => move.length===selectedIds.length && move.every(id=>selectedIds.includes(id)));
-  const passCount = Math.min(required,gameState.hand.length);
+  const passCount = gameState.mode === '1v1' && gameState.trick?.attacker === gameState.me
+    ? 0 : Math.min(required, gameState.hand.length);
   const legalPass = selectedCards.length===passCount || (gameState.trick?.attacker===gameState.me && selectedCards.length===0);
 
   return (
