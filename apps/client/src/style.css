@@ -279,3 +279,116 @@ body {
   .premium-game .mobile-chat > button {width:37px !important;height:37px !important;}
   .premium-game .mobile-chat-open {top:auto !important;bottom:9px !important;right:7px !important;}
 }
+
+
+/* Desktop browser polish: richer jewel-green velvet, larger readable cards and controls.
+   Kept strictly to desktop: existing phone sizing remains unchanged. */
+@media (min-width: 821px) {
+  .premium-game {
+    padding: 7px 12px !important;
+    background:radial-gradient(ellipse at 50% 40%,#152e42 0%,#070e20 78%) !important;
+  }
+  .premium-frame {
+    width:min(100%,1500px);
+    border-radius:44px;
+  }
+  .premium-topbar {
+    min-height:76px;
+    padding:10px 30px;
+  }
+  .premium-mode-badge {font-size:23px;padding:8px 20px;}
+  .premium-topbar-center {
+    position:absolute;right:153px;top:25px;
+    font-size:15px;gap:18px;
+  }
+  .premium-icon-button {min-width:47px;min-height:47px;font-size:25px;}
+  .premium-felt {
+    margin:0 clamp(9px,1.4vw,20px);
+    padding:12px 25px 10px;
+    border-radius:80px;
+    border-color:#d2ad60;
+    box-shadow:inset 0 0 0 2px rgba(234,203,130,.32),
+      inset 0 0 50px 14px rgba(0,14,11,.48),0 3px 16px rgba(0,0,0,.55);
+  }
+  .premium-other-players {min-height:175px;gap:24px;}
+  .premium-seat {gap:10px;}
+  .premium-seat-name {font-size:20px;padding:5px 16px 5px 5px;gap:10px;}
+  .premium-seat-name img {width:42px;height:42px;}
+  .premium-seat-username {max-width:200px;}
+  .premium-seat .carpet-card-back {
+    width:49px !important;height:72px !important;
+    margin-left:-16px !important;border-radius:6px;
+    box-shadow:0 4px 7px rgba(0,0,0,.5);
+  }
+  .premium-seat .carpet-card-back:first-child {margin-left:0 !important;}
+  .premium-seat > div:last-child {transform:none;}
+  .premium-seat > div:last-child > span {font-size:13px !important;margin-bottom:3px;}
+  .premium-trump-label {margin:0 0 -8px;font-size:23px;padding:9px 24px;}
+  .premium-table-zone {
+    min-height:225px;
+    gap:26px;padding:3px 30px;
+  }
+  .premium-trick-playarea {
+    flex:1;max-width:min(74%,820px);
+    height:clamp(205px,33vh,340px);
+    border-width:2px;border-radius:38px;
+    background:rgba(0,32,24,.23);
+  }
+  .premium-trick-cards .card-full {
+    width:clamp(80px,7vw,105px) !important;
+    height:auto !important;aspect-ratio:2/3;
+  }
+  .premium-last-player {font-size:16px;}
+  .premium-deck-zone {min-width:135px;}
+  .premium-deck-stack {width:105px;height:148px;}
+  .premium-deck-card {width:97px;height:146px;}
+  .premium-deck-trump .card-small {
+    width:69px !important;height:auto !important;aspect-ratio:2/3;
+  }
+  .premium-deck-card + .premium-deck-trump {left:24px;top:20px;}
+  .premium-count-badge {top:113px;right:0;min-width:47px;font-size:22px;padding:7px;}
+  .premium-deck-text {margin-top:15px;font-size:15px;}
+  .premium-team-scores {font-size:14px;gap:26px;}
+  .premium-hand-zone {min-height:157px;padding:10px 0 3px;}
+  .premium-hand {padding:14px 7px 0;}
+  .premium-hand .card-full {
+    width:clamp(80px,6.8vw,105px) !important;
+    height:auto !important;aspect-ratio:2/3;
+  }
+  .premium-hand-item {margin-left:-18px !important;}
+  .premium-hand-item:first-child {margin-left:0 !important;}
+  .premium-footer {min-height:97px;padding:10px 44px;}
+  .premium-self {min-width:160px;font-size:21px;gap:10px;}
+  .premium-self img {width:55px;height:55px;}
+  .premium-action {font-size:22px;min-width:132px;min-height:56px;padding:12px 28px;}
+  .premium-exit-button {font-size:16px;min-height:46px;padding:10px 18px;}
+  .premium-wait-turn,.premium-selection-help {font-size:16px;}
+  .premium-voice-slot .kozel-voice {
+    position:absolute;top:10px;left:calc(50% - 38px);
+    width:76px;min-width:76px;max-height:calc(100vh - 50px);
+  }
+  .premium-voice-slot .kozel-voice__mobile-toggle {
+    display:flex;width:72px;height:56px;font-size:32px;
+  }
+  .premium-voice-slot .kozel-voice--mobile-open {
+    right:25px;left:auto;top:73px;
+    width:330px;min-width:0;max-height:65vh;
+  }
+  .premium-game .mobile-chat {
+    right:87px !important;top:18px !important;
+  }
+  .premium-game .mobile-chat > button {
+    width:47px !important;height:47px !important;font-size:25px !important;
+  }
+}
+/* Velvet nap: the fine crossed threads are transparent and do not obscure cards. */
+.premium-felt {
+  background:
+    repeating-linear-gradient(33deg,rgba(255,255,255,.017) 0px,rgba(255,255,255,.017) 1px,transparent 1px,transparent 4px),
+    repeating-linear-gradient(123deg,rgba(0,0,0,.028) 0px,rgba(0,0,0,.028) 1px,transparent 1px,transparent 5px),
+    radial-gradient(ellipse at 49% 43%,#07834c 0%,#006b41 42%,#004c33 77%,#002e25 100%);
+}
+/* Keep overlays closed unless activated, including desktop. */
+.premium-voice-slot .kozel-voice:not(.kozel-voice--mobile-open) .kozel-voice__content {
+  display:none;
+}
