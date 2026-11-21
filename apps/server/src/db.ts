@@ -102,7 +102,8 @@ export const db = {
       ), '[]'::json) AS messages
       FROM users WHERE username = $1 AND friends ? $2
     `, [username, friend, before]);
-    return result.rows[0]?.messages;
+    const messages = result.rows[0]?.messages as { id: number; sender: string; recipient: string; body: string; createdAt: string }[] | undefined;
+    return messages?.map(message => ({ ...message, createdAt: new Date(message.createdAt).toISOString() }));
   },
   async sendFriendMessage(username: string, friend: string, body: string) {
     const result = await pool.query(`
