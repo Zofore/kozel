@@ -468,6 +468,7 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
   const [isReversed, setIsReversed] = useState(false);
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth <= 820);
   const [confirmExit, setConfirmExit] = useState(false);
+  const [premiumSettingsOpen, setPremiumSettingsOpen] = useState(false);
 
   const prevState = useRef<any>(null);
   const lastProcessedMsgId = useRef<string | null>(null);
@@ -682,13 +683,13 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
 
   return (
     <LayoutGroup>
-      {voiceChat}
-      <div className="mobile-game" onClick={unlockGameAudio} style={{
+      <div className="mobile-game premium-game" onClick={unlockGameAudio} style={{
         display: 'flex', flexDirection: 'column', height: '100vh',
-        background: '#1a1a2e', position: 'relative', overflow: 'hidden',
+        background: '#101b32', position: 'relative', overflow: 'hidden',
         transform: isReversed ? 'rotate(180deg)' : 'none',
         transition: 'transform 0.6s ease-in-out',
       }}>
+        <div className="premium-voice-slot">{voiceChat}</div>
         <style>{floatingEmojiStyle}</style>
         {floatingEmojis.map(e => <div key={e.id} className="floating-emoji" style={{ left: `${e.left}%`, fontSize: isMobile ? 40 : 60 }}>{e.emoji}</div>)}
         {rainEmojis.map(e => <div key={e.id} className="rain-emoji" style={{ left: `${e.left}%`, animationDuration: `${e.duration}s`, fontSize: isMobile ? 30 : 50 }}>{e.emoji}</div>)}
@@ -754,163 +755,112 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
           )}
         </div>
 
-        <div className={`mobile-game-header ${isMobile ? 'mobile-compact-header' : ''}`} style={{ background: '#252540', padding: isMobile ? '8px 12px' : '15px 30px', display: 'grid', gridTemplateColumns: isMobile ? '1fr auto' : '1fr auto 1fr', alignItems: 'center', borderBottom: '2px solid #444', gap: isMobile ? '6px' : '15px' }}>
-          <div style={{ justifySelf: 'start', display: 'flex', alignItems: 'center', gap: isMobile ? 6 : 15, flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
-            <div title={roomId} onClick={()=>navigator.clipboard?.writeText(roomId).catch(()=>{})} style={{ color: '#f0c674', fontSize: isMobile ? 11 : '14px', fontWeight: 'bold', cursor:'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: isMobile ? 80 : 'none' }}>ID:…{roomId.slice(-4)}</div>
-            {isDev && openDevConsole && <button onClick={openDevConsole} title="Dev Console" style={{ background: 'transparent', border: '1px solid #ffd700', color: '#ffd700', borderRadius: 6, padding: isMobile ? '3px 6px' : '4px 10px', cursor: 'pointer', fontSize: isMobile ? 11 : 14, display: 'flex', alignItems: 'center', gap: 4, minWidth: isMobile ? 28 : 'auto', minHeight: isMobile ? 24 : 'auto' }}>{isMobile ? '🔧' : '🛠️ Dev'}</button>}
-          </div>
-          <div style={{ ...(isMobile ? {} : { justifySelf: 'center' }), display: 'flex', alignItems: 'center', gap: '10px', fontSize: isMobile ? 12 : 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <img src={getAvatar(gameState.players[0]?.name)} style={{ width: isMobile ? 20 : 30, height: isMobile ? 20 : 30, borderRadius: '50%', background: '#fff' }} />
-              <span style={{ maxWidth: isMobile ? 60 : undefined, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: isMobile ? 11 : undefined }}>{gameState.players[0]?.name}</span>
+        <div className="premium-frame">
+          <header className="premium-topbar">
+            <div className="premium-mode-badge">{gameState.mode === '1v1' ? '1 × 1' : '2 × 2'}</div>
+            <div className="premium-topbar-center">
+              <span>Кон {gameState.roundNumber || 1}</span>
+              <span className={timeLeft <= 5 ? 'premium-timer premium-timer--warning' : 'premium-timer'}>⏱ {timeLeft} с</span>
             </div>
-            <span style={{ color: '#f0c674', fontWeight: 'bold', fontSize: isMobile ? 11 : undefined }}>VS</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <span style={{ maxWidth: isMobile ? 60 : undefined, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: isMobile ? 11 : undefined }}>{gameState.players[1]?.name}</span>
-              <img src={getAvatar(gameState.players[1]?.name)} style={{ width: isMobile ? 20 : 30, height: isMobile ? 20 : 30, borderRadius: '50%', background: '#fff' }} />
+            <div className="premium-topbar-actions">
+              {isDev && openDevConsole && <button type="button" className="premium-icon-button" onClick={openDevConsole} title="Dev Console">🛠</button>}
+              <button type="button" className="premium-icon-button" onClick={() => setPremiumSettingsOpen(v => !v)} title="Настройки стола" aria-label="Настройки стола" aria-expanded={premiumSettingsOpen}>⚙</button>
             </div>
-          </div>
-          {isMobile ? null : (
-            <div style={{ justifySelf: 'end', display: 'flex', gap: 20 }}>
-              <div style={{ color: timeLeft <= 5 ? '#f44336' : 'white', fontSize: '14px', fontWeight: timeLeft <= 5 ? 'bold' : 'normal' }}>{timeLeft}с</div>
-              <div style={{ color: '#f0c674', fontSize: '14px', fontWeight: 'bold' }}>Козырь: {gameState.trump}</div>
+          </header>
+          {premiumSettingsOpen && (
+            <div className="premium-settings-panel">
+              <div>Комната: <span>{roomId.slice(0,8)}…</span></div>
+              <button type="button" onClick={() => navigator.clipboard?.writeText(roomId).catch(()=>{})}>Копировать ID</button>
+              <button type="button" onClick={() => {setPremiumSettingsOpen(false);setConfirmExit(true);}}>Выйти из партии</button>
+              <button type="button" onClick={() => setPremiumSettingsOpen(false)}>Закрыть</button>
             </div>
           )}
-        </div>
-
-        {isMobile && (
-          <div style={{ display: 'flex', justifyContent: 'space-around', padding: '4px 8px', background: '#1e1e36', fontSize: 11, color: '#aaa', gap: 10 }}>
-            <span style={{ color: timeLeft <= 5 ? '#f44336' : '#f0c674', fontWeight: 'bold' }}>⏱ {timeLeft}с</span>
-            <span>Кон: {gameState.roundNumber || 1}</span>
-            <span style={{ color: '#f0c674' }}>Козырь: {gameState.trump}</span>
-          </div>
-        )}
-
-        <div className="mobile-player-list" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: isMobile ? 6 : 12, padding: isMobile ? 6 : 10, background: '#252540', color: 'white' }}>
-          {gameState.players.map((p: any) => (
-            <div key={p.id} style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              gap: 5, padding: isMobile ? '5px 7px' : '8px 12px', borderRadius: 8,
-              border: p.id === gameState.currentPlayer ? '1px solid #f0c674' : '1px solid #555',
-              background: p.id === gameState.me ? 'rgba(240,198,116,0.07)' : 'rgba(0,0,0,0.22)',
-              minWidth: isMobile ? 112 : 136, maxWidth: isMobile ? '46%' : 240, boxSizing: 'border-box'
-            }}>
-              <span style={{ color: p.id === gameState.currentPlayer ? '#f0c674' : '#ddd', fontSize: isMobile ? 11 : 13, textAlign: 'center', overflowWrap: 'anywhere' }}>
-                {p.side} · {p.name}{p.id === gameState.me ? ' · вы' : ''}{!p.connected ? ' · не в сети' : ''}
-              </span>
-              {p.id === gameState.me ? (
-                <span style={{ color: '#ccc', fontSize: isMobile ? 10 : 12 }}>Ваши карты: {gameState.hand.length}</span>
-              ) : (
-                <OpponentCardBacks count={p.handCount} compact={isMobile} />
-              )}
-            </div>
-          ))}
-        </div>
-        <div className="felt-table" style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
-          <div className="mobile-table-top" style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', padding: '20px 40px', alignItems: 'flex-start' }}>
-            <div style={{ justifySelf: 'start', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '10px', color: gameState.players[0]?.isAdmin ? undefined : '#ccc' }} className={gameState.players[0]?.isAdmin ? 'dev-nick' : ''}>
-                <img src={getAvatar(gameState.players[0]?.name)} style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff' }} />{gameState.players[0]?.isAdmin && '👑 '}{gameState.players[0]?.name}
-              </div>
-              <div style={{ position: 'relative', width: '60px', height: '90px' }}>
-                {Array.from({ length: gameState.bitaCount?.A || 0 }).map((_, i) => (
-                  <div key={i} style={{ position: 'absolute', top: Math.min(i * 1.5, 20), left: Math.min(i * 1.5, 20) }}>
-                    <CardView card={{ suit: '♠', rank: '6' }} small faceDown={true} isDevCard={gameState.players[0]?.isAdmin} />
+          <main className="premium-felt">
+            <div className={'premium-other-players premium-other-players--' + gameState.mode}>
+              {gameState.players.filter((p: any) => p.id !== gameState.me).map((p: any) => (
+                <div className={'premium-seat' + (p.side === gameState.players[gameState.me]?.side ? ' premium-seat--teammate' : '')} key={p.id}>
+                  <div className={'premium-seat-name' + (p.id === gameState.currentPlayer ? ' premium-seat-name--turn' : '')}>
+                    <img src={getAvatar(p.name)} alt="" />
+                    <span className="premium-status-dot" aria-label={p.connected ? 'В сети' : 'Не в сети'} style={{background:p.connected ? '#22d45b' : '#777'}} />
+                    <span className="premium-seat-username">{p.name}{p.isAdmin ? ' 👑' : ''}</span>
+                    {gameState.mode === '2v2' && <span className="premium-seat-team">{p.side === gameState.players[gameState.me]?.side ? 'Союзник' : 'Соперник'}</span>}
                   </div>
-                ))}
-                {(!gameState.bitaCount?.A || gameState.bitaCount.A === 0) && <div style={{ width: '50px', height: '75px', border: '2px dashed #666', borderRadius: '8px', position: 'absolute' }} />}
-              </div>
-            </div>
-            <div style={{ justifySelf: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div style={{ position: 'relative', width: '100px', height: '105px' }}>
-                {gameState.deckCount > 0 && (
-                  <div className="carpet-card-back" style={{ 
-                    position: 'absolute', top: 0, left: 15, width: '70px', height: '105px', 
-                    boxShadow: '0 10px 15px rgba(0,0,0,0.6)' 
-                  }} />
-                )}
-                {gameState.trumpCard && (
-                  <div style={{ position: 'absolute', top: 15, left: 45, transform: 'rotate(90deg) translateZ(0)', zIndex: 2, willChange: 'transform', pointerEvents: 'none' }}>
-                    <CardView card={gameState.trumpCard} />
-                  </div>
-                )}
-              </div>
-              <div style={{ color: 'white', marginTop: '15px', alignSelf: 'center', textAlign: 'center', whiteSpace: 'nowrap', background: 'rgba(0,0,0,0.6)', padding: '2px 10px', borderRadius: '10px' }}>В колоде: {gameState.deckCount}</div>
-            </div>
-            <div style={{ justifySelf: 'end', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '10px', color: gameState.players[1]?.isAdmin ? undefined : '#ccc' }} className={gameState.players[1]?.isAdmin ? 'dev-nick' : ''}>
-                <img src={getAvatar(gameState.players[1]?.name)} style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff' }} />{gameState.players[1]?.isAdmin && '👑 '}{gameState.players[1]?.name}
-              </div>
-              <div style={{ position: 'relative', width: '60px', height: '90px' }}>
-                {Array.from({ length: gameState.bitaCount?.B || 0 }).map((_, i) => (
-                  <div key={i} style={{ position: 'absolute', top: Math.min(i * 1.5, 20), left: Math.min(i * 1.5, 20) }}>
-                    <CardView card={{ suit: '♠', rank: '6' }} small faceDown={true} isDevCard={gameState.players[1]?.isAdmin} />
-                  </div>
-                ))}
-                {(!gameState.bitaCount?.B || gameState.bitaCount.B === 0) && <div style={{ width: '50px', height: '75px', border: '2px dashed #666', borderRadius: '8px', position: 'absolute' }} />}
-              </div>
-            </div>
-          </div>
-
-          <div className="mobile-trick" style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-            {gameState.trick ? (
-              <>
-                <div style={{ color: '#ccc', fontSize: '18px', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(0,0,0,0.4)', padding: '5px 15px', borderRadius: '20px' }}>
-                  Ходил: <span className={gameState.players[gameState.trick.attacker]?.isAdmin ? 'dev-nick' : ''} style={{ color: gameState.players[gameState.trick.attacker]?.isAdmin ? undefined : '#f0c674', fontWeight: 'bold' }}>{gameState.players[gameState.trick.attacker]?.isAdmin && '👑 '}{gameState.players[gameState.trick.attacker]?.name}</span>
-                  <div className={gameState.players[gameState.trick.attacker]?.isAdmin ? 'dev-avatar-frame' : ''}><img src={getAvatar(gameState.players[gameState.trick.attacker]?.name)} style={{ width: 25, height: 25, borderRadius: '50%', background: '#fff' }} /></div>
+                  <OpponentCardBacks count={p.handCount} compact={isMobile || gameState.mode === '2v2'} />
                 </div>
-                <div className="mobile-trick-cards" style={{ display: 'flex', paddingLeft: '20px' }}>
-                  {gameState.trick.cardsOnTable.map((card: any, i: number) => (
-                    <motion.div key={i} layoutId={`${card.rank}_${card.suit}`} style={{ marginLeft: '-20px', zIndex: i }}>
-                      <CardView card={card} />
+              ))}
+            </div>
+            <div className="premium-trump-label">Козырь: <strong>{gameState.trump || '—'}</strong></div>
+            <div className="premium-table-zone">
+              <div className="premium-trick-playarea">
+                {gameState.trick ? (
+                  <>
+                    <div className="premium-last-player">Ходил: {gameState.players[gameState.trick.attacker]?.name}</div>
+                    <div className="premium-trick-cards">
+                      {gameState.trick.cardsOnTable.map((card: any, i: number) => (
+                        <motion.div key={i} layoutId={card.rank + '_' + card.suit} style={{zIndex:i,marginLeft:i ? (isMobile ? -12 : -16) : 0}}>
+                          <CardView card={card} />
+                        </motion.div>
+                      ))}
+                    </div>
+                  </>
+                ) : <span className="premium-waiting">Ожидание хода…</span>}
+              </div>
+              <div className="premium-deck-zone">
+                <div className="premium-deck-stack">
+                  {gameState.deckCount > 0 && <div className="carpet-card-back premium-deck-card" />}
+                  {gameState.trumpCard && <div className="premium-deck-trump"><CardView card={gameState.trumpCard} small /></div>}
+                </div>
+                <span className="premium-count-badge">{gameState.deckCount}</span>
+                <span className="premium-deck-text">Колода</span>
+              </div>
+            </div>
+            <div className="premium-team-scores">
+              <span>Бита А: {gameState.bitaCount?.A || 0}</span>
+              <span>Бита Б: {gameState.bitaCount?.B || 0}</span>
+            </div>
+            <div className="premium-hand-zone">
+              <div className="premium-hand" aria-label="Ваши карты">
+                {gameState.hand.map((card: any, index: number) => {
+                  const selected = selectedCards.some(c => c.suit === card.suit && c.rank === card.rank);
+                  const cardStr = card.rank + '_' + card.suit;
+                  const isLegal = gameState.legalMoves?.some((move: string[]) => move.includes(cardStr));
+                  const center = (gameState.hand.length - 1) / 2;
+                  return (
+                    <motion.div key={card.rank + card.suit} layoutId={cardStr}
+                      className="premium-hand-item"
+                      style={{zIndex:index+1,marginLeft:index === 0 ? 0 : (isMobile ? -13 : -11)}}
+                      initial={{y:70,opacity:0,rotate:0}}
+                      animate={{y:selected ? -17 : Math.abs(index-center)*2,opacity:1,rotate:(index-center)*3}}
+                      transition={{type:'spring',stiffness:140,damping:20}}>
+                      <CardView card={card} selected={selected} onClick={() => toggleCard(card)} isLegal={isLegal} />
                     </motion.div>
-                  ))}
-                </div>
-              </>
-            ) : <div style={{ color: 'rgba(255,255,255,0.2)', fontSize: '24px', fontWeight: 'bold' }}>Ожидание хода...</div>}
-          </div>
-        </div>
-
-        <div className="mobile-controls" style={{ background: '#1a1a2e', padding: '15px', borderTop: '2px solid #444', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          {errorMsg && <div style={{ background: '#d32f2f', padding: '10px', borderRadius: '8px', marginBottom: '15px', fontWeight: 'bold' }}>{errorMsg}</div>}
-          <div className="mobile-hand" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '15px', minHeight: '120px' }}>
-            {gameState.hand.map((card: any, index: number) => {
-              const isSelected = selectedCards.some(c => c.suit === card.suit && c.rank === card.rank);
-              const cardStr = `${card.rank}_${card.suit}`;
-              const isLegal = gameState.legalMoves?.some((move: string[]) => move.includes(cardStr));
-              return (
-                <motion.div 
-                  key={card.rank + card.suit} 
-                  layoutId={`${card.rank}_${card.suit}`}
-                  initial={{ y: 100, opacity: 0, rotate: 10 }}
-                  animate={{ y: 0, opacity: 1, rotate: 0 }}
-                  transition={{ type: 'spring', stiffness: 100, delay: index * 0.05 }}
-                >
-                  <CardView card={card} selected={isSelected} onClick={() => toggleCard(card)} isLegal={isLegal} />
-                </motion.div>
-              );
-            })}
-          </div>
-          <div className="mobile-actions" style={{ display: 'flex', gap: isMobile ? 8 : 15, height: 'auto', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', padding: isMobile ? '5px 0' : 0 }}>
-            {isMyTurn && !gameState.trick && legalSelection && (
-              <button onClick={playCards} style={{ padding: isMobile ? '12px 20px' : '10px 30px', background: '#f0c674', border: 'none', borderRadius: '8px', fontSize: isMobile ? 16 : 18, fontWeight: 'bold', cursor: 'pointer', color: '#000', boxShadow: '0 4px 0 #b08d40', minWidth: isMobile ? 120 : 'auto', minHeight: 48 }}>{isMobile ? 'Ход' : 'Сделать ход'}</button>
-            )}
-
-            {isMyTurn && gameState.trick && legalSelection && (
-              <button onClick={beat} style={{ padding: isMobile ? '12px 20px' : '10px 30px', background: '#4caf50', border: 'none', borderRadius: '8px', fontSize: isMobile ? 16 : 18, fontWeight: 'bold', cursor: 'pointer', color: '#fff', boxShadow: '0 4px 0 #2e7d32', minWidth: isMobile ? 120 : 'auto', minHeight: 48 }}>{isMobile ? 'Бить' : 'Перебить'}</button>
-            )}
-
-            {isMyTurn && gameState.trick && legalPass && (
-              <button onClick={bita} style={{ padding: isMobile ? '12px 20px' : '10px 30px', background: '#f44336', border: 'none', borderRadius: '8px', fontSize: isMobile ? 16 : 18, fontWeight: 'bold', cursor: 'pointer', color: '#fff', boxShadow: '0 4px 0 #c62828', minWidth: isMobile ? 120 : 'auto', minHeight: 48 }}>{isMobile ? 'Бита' : 'Бита (Ваше)'}</button>
-            )}
-
-            {!isMyTurn && <div style={{ color: '#555', alignSelf: 'center', fontSize: isMobile ? 14 : 16 }}>⏳</div>}
-            {isMyTurn && gameState.trick && !legalPass && gameState.trick.attacker !== gameState.me && (
-              <div style={{ color: '#aaa', alignSelf: 'center', fontSize: isMobile ? 12 : 14, textAlign: 'center', padding: '0 10px' }}>Выделите {passCount} карт{passCount > 1 ? (passCount < 5 ? 'ы' : '') : ''}</div>
-            )}
-
-            <button onClick={() => { playSound('click'); setConfirmExit(true); }} style={{ flexBasis: isMobile ? '100%' : 'auto', maxWidth: isMobile ? 180 : undefined, marginTop: isMobile ? 18 : 0, padding: isMobile ? '12px 16px' : '10px 20px', background: 'transparent', color: '#aaa', border: '1px solid #555', borderRadius: '8px', cursor: 'pointer', fontSize: isMobile ? 14 : 16, minWidth: 48, minHeight: 48 }}>Выйти</button>
-          </div>
+                  );
+                })}
+              </div>
+            </div>
+          </main>
+          <footer className="premium-footer">
+            <div className="premium-self">
+              <img src={getAvatar(username)} alt="" />
+              <div><span className="premium-status-dot" /> Вы</div>
+            </div>
+            <div className="premium-actions">
+              {isMyTurn && !gameState.trick && (
+                <button type="button" className="premium-action premium-action--gold" onClick={playCards} disabled={!legalSelection}>Ход</button>
+              )}
+              {isMyTurn && gameState.trick && (
+                <button type="button" className="premium-action premium-action--gold" onClick={beat} disabled={!legalSelection}>Бить</button>
+              )}
+              {isMyTurn && gameState.trick && (
+                <button type="button" className="premium-action premium-action--dark" onClick={bita} disabled={!legalPass}>Пас</button>
+              )}
+              {!isMyTurn && <span className="premium-wait-turn">⏳ Ход соперника</span>}
+              {isMyTurn && gameState.trick && !legalPass && gameState.trick.attacker !== gameState.me &&
+                <span className="premium-selection-help">Выдели {passCount} карт</span>}
+              <button type="button" className="premium-exit-button" onClick={() => setConfirmExit(true)}>Выйти</button>
+            </div>
+          </footer>
+          {errorMsg && <div className="premium-error" role="alert">{errorMsg}</div>}
         </div>
       </div>
       {confirmExit && (
