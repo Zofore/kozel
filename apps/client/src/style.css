@@ -387,3 +387,91 @@ body {
   .premium-hand .card-full {width:clamp(47px,15.2vw,64px) !important;}
   .premium-footer {min-height:78px;}
 }
+
+
+/* V3: desktop readability and properly separated header controls (Nov 2026). */
+@media (min-width:821px) {
+  .premium-topbar {
+    position:relative;
+    min-height:88px;
+    box-sizing:border-box;
+    padding:16px 36px;
+  }
+  .premium-topbar-actions {
+    position:absolute;
+    right:26px;
+    top:17px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    z-index:21;
+  }
+  .premium-topbar-center {
+    position:absolute;
+    top:31px;
+    left:calc(50% - 275px);
+    gap:12px;
+    font-size:16px;
+    z-index:4;
+  }
+  .premium-voice-slot .kozel-voice:not(.kozel-voice--mobile-open) {
+    left:calc(50% - 47px);
+    top:10px;
+    width:94px;
+    min-height:68px;
+    z-index:22;
+    border-width:3px;
+    border-radius:24px;
+  }
+  .premium-voice-slot .kozel-voice__mobile-toggle {
+    width:88px;
+    height:62px;
+    font-size:36px;
+  }
+  .premium-felt {
+    padding-top:16px;
+    padding-bottom:8px;
+  }
+  .premium-other-players {min-height:190px;}
+  .premium-seat-name {font-size:23px;}
+  .premium-seat-name img {width:48px;height:48px;}
+  .premium-seat .carpet-card-back {
+    width:60px !important;
+    height:87px !important;
+  }
+  .premium-seat > div:last-child > div:last-child {min-height:87px !important;}
+  .premium-seat > div:last-child > span {font-size:16px !important;}
+  .premium-trump-label {font-size:24px;padding:10px 27px;}
+  .premium-table-zone {min-height:210px;gap:22px;justify-content:center;}
+  .premium-trick-playarea {
+    height:clamp(215px,32vh,370px);
+    max-width:min(76%,930px);
+  }
+  .premium-trick-cards .card-full {
+    width:112px !important;
+    height:168px !important;
+  }
+  .premium-deck-zone {min-width:155px;}
+  .premium-deck-stack {width:114px;height:164px;}
+  .premium-deck-card {width:105px;height:157px;}
+  .premium-deck-trump .card-small {width:80px !important;height:120px !important;}
+  .premium-count-badge {top:125px;font-size:25px;}
+  .premium-hand-zone {min-height:182px;padding:0 0 4px;}
+  .premium-hand .card-full {width:109px !important;height:164px !important;}
+  .premium-hand-item {filter:drop-shadow(0 7px 5px rgba(0,0,0,.4));}
+  .premium-footer {min-height:94px;}
+  .premium-action {font-size:23px;min-width:155px;min-height:58px;}
+  .premium-exit-button {font-size:17px;min-height:52px;}
+}
+/* At a shorter desktop viewport, protect the bottom of the table from being clipped. */
+@media (min-width:821px) and (max-height:800px) {
+  .premium-other-players {min-height:152px;}
+  .premium-seat .carpet-card-back {width:50px !important;height:72px !important;}
+  .premium-seat > div:last-child > div:last-child {min-height:72px !important;}
+  .premium-trick-playarea {height:clamp(175px,27vh,245px);}
+  .premium-trick-cards .card-full {width:94px !important;height:141px !important;}
+  .premium-hand-zone {min-height:142px;}
+  .premium-hand .card-full {width:91px !important;height:137px !important;}
+  .premium-footer {min-height:77px;}
+}
+/* Narrow screens retain the existing responsive card dimensions. */
