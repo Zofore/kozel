@@ -191,6 +191,8 @@ export function Menu({ socket, user, onPlay, onProfile, onFriends, onLogout, onR
           {(user.achievements || []).includes('first_win') && <span title="Первая победа" style={{marginRight:8}}>🥇 Первая победа</span>}
           {(user.achievements || []).includes('ten_wins') && <span title="10 побед" style={{marginRight:8}}>🏅 10 побед</span>}
           {(user.achievements || []).includes('hundred_wins') && <span title="100 побед" style={{marginRight:8}}>🏆 100 побед</span>}
+          {(user.achievements || []).includes('ten_win_streak') && <span style={{marginRight:8}}>🔥 10 побед подряд</span>}
+          {(user.achievements || []).includes('no_penalty_win') && <span style={{marginRight:8}}>🎯 Победа без штрафных очков</span>}
           {(user.achievements || []).includes('ten_games') && <span title="10 партий">🎴 10 партий</span>}
         </div>
         <button className="kozel-menu-action" onClick={() => setHistoryOpen(true)} style={{ padding:12, width:'100%', background:'#252540', color:'#f0c674', border:'1px solid #f0c674', borderRadius:8, fontWeight:'bold', marginBottom:10, cursor:'pointer', minHeight:44 }}>🎴 История партий</button>

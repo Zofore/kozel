@@ -42,6 +42,21 @@ test('registration, profile, friends and idempotent match stats using PostgreSQL
     assert.equal(recorded.length,1, 'duplicate settle must not duplicate history');
     assert.equal(recorded[0].won,true);
     assert(recorded[0].opponents.includes(names[1]));
+    const duel = (winner: string, penaltyPoints: number) => [
+      { name: names[0], won: winner === names[0], penaltyPoints },
+      { name: names[1], won: winner === names[1], penaltyPoints }
+    ];
+    await db.settleMatch(randomUUID(), duel(names[1], 4));
+    for (let i = 0; i < 9; i++) await db.settleMatch(randomUUID(), duel(names[0], 4));
+    assert.deepEqual((await db.getUser(names[0]))?.matchAchievements, []);
+    const cleanWin = randomUUID();
+    await Promise.all([
+      db.settleMatch(cleanWin, duel(names[0], 0)),
+      db.settleMatch(cleanWin, duel(names[0], 0))
+    ]);
+    await db.settleMatch(randomUUID(), duel(names[1], 4));
+    assert.deepEqual((await db.getUser(names[0]))?.matchAchievements.sort(), ['no_penalty_win', 'ten_win_streak']);
+    assert.deepEqual((await db.getUser(names[1]))?.matchAchievements, []);
     assert.equal(await db.friends(names[0],names[1],'remove'),null);
     assert(!(await db.getUser(names[0]))?.friends.includes(names[1]));
   } finally {await db.close();}

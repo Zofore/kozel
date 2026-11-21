@@ -46,7 +46,8 @@ const playerProgress = (u: any) => {
     ...(wins >= 1 ? ['first_win'] : []),
     ...(wins >= 10 ? ['ten_wins'] : []),
     ...(wins >= 100 ? ['hundred_wins'] : []),
-    ...(wins + losses >= 10 ? ['ten_games'] : [])
+    ...(wins + losses >= 10 ? ['ten_games'] : []),
+    ...(u.matchAchievements || [])
   ] };
 };
 const publicUser = (u: any) => ({ ...playerProgress(u), username: u.username, fullname: u.fullname, avatar: u.avatar || '', status: u.status || 'В сети', wins: u.wins || 0, losses: u.losses || 0, online: onlineUsers.has(u.username), isAdmin: isAdminId(u.id) });
@@ -577,7 +578,7 @@ async function main() {
     settling.add(roomId);
     try {
       const winningSide=state.matchScore.A>=24?'B':'A';
-      await db.settleMatch(roomId,state.players.map(p=>({name:p.name,won:p.side===winningSide})));
+      await db.settleMatch(roomId,state.players.map(p => ({ name: p.name, won: p.side === winningSide, penaltyPoints: state.matchScore[p.side] })));
       state.settled=true;
     } catch (err) { app.log.error({roomId,code:(err as any).code},'Statistics save failed; will retry'); }
     finally { settling.delete(roomId); }
