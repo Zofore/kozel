@@ -79,3 +79,37 @@ test('HTTP authorization, friends, room capacity, invitations and reconnect', {t
     let forbidden=false;se.on('admin_rooms_list',()=>forbidden=true);se.emit('admin_get_rooms');await delay(150);assert.equal(forbidden,false);
   } finally {sockets.forEach(s=>s.disconnect());}
 });
+
+test('ordinary players can start a private game at every bot difficulty', {timeout:45000}, async () => {
+  const [player, other] = await Promise.all([account(), account()]);
+  const [socket, outsider] = await Promise.all([connect(player.token), connect(other.token)]);
+  try {
+    assert((await ack(socket, 'create_dev_room')).error);
+    assert((await ack(socket, 'create_bot_room', 'invalid')).error);
+
+    for (const difficulty of ['novice', 'amateur', 'professional', 'master', 'legend']) {
+      const {roomId} = await ack(socket, 'create_bot_room', difficulty);
+      assert.match(roomId, /^BOT-/);
+      assert((await ack(outsider, 'join_room', roomId)).error);
+      if (difficulty === 'legend') {
+        const state = await waitFor(socket, 'game_state', s => s.roomId === roomId && s.phase === 'playing');
+        assert.equal(state.mode, '1v1');
+        assert.equal(state.players[1].name, '🤖 BOT');
+        assert.equal(state.players[1].connected, true);
+        assert.equal(state.players[1].hand, undefined);
+
+        const afterBotMove = waitFor(socket, 'game_state', s => s.roomId === roomId &&
+          s.stateVersion > state.stateVersion && s.currentPlayer === 0, 10000);
+        if (state.currentPlayer === 0) {
+          const cards = state.legalMoves[0].map(key => state.hand.find(card => key === card.rank + '_' + card.suit));
+          socket.emit('play_card', roomId, cards, state.stateVersion);
+        }
+        await afterBotMove;
+      }
+      socket.emit('leave_room', roomId);
+    }
+  } finally {
+    socket.disconnect();
+    outsider.disconnect();
+  }
+});

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Socket } from 'socket.io-client';
 
 export function Lobby({ socket, setRoomId, username, onBack }: { socket: Socket, setRoomId: (id: string) => void, username: string, onBack: () => void }) {
+  const [difficulty, setDifficulty] = useState('professional');
+  const [creatingBotRoom, setCreatingBotRoom] = useState(false);
   const [joinId, setJoinId] = useState('');
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth <= 820);
 
@@ -17,6 +19,15 @@ export function Lobby({ socket, setRoomId, username, onBack }: { socket: Socket,
     });
   };
 
+  const createBotRoom = () => {
+    setCreatingBotRoom(true);
+    socket.timeout(5000).emit('create_bot_room', difficulty, (err: Error | null, res?: { roomId?: string; error?: string }) => {
+      setCreatingBotRoom(false);
+      if (!err && res?.roomId) setRoomId(res.roomId);
+      else alert(res?.error || 'Не удалось начать игру с ботом');
+    });
+  };
+
   const joinRoom = () => {
     if (!joinId.trim()) return alert('Введите ID комнаты!');
     socket.timeout(5000).emit('join_room',joinId.trim(),(err:any,res:any)=>{
@@ -25,7 +36,7 @@ export function Lobby({ socket, setRoomId, username, onBack }: { socket: Socket,
   };
 
   return (
-    <div className="mobile-screen" style={{ padding: isMobile ? 'max(16px, env(safe-area-inset-top))' : 20, height: isMobile ? '100dvh' : '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', background: 'transparent', boxSizing: 'border-box' }}>
+    <div className="mobile-screen" style={{ padding: isMobile ? 'max(16px, env(safe-area-inset-top))' : 20, minHeight: isMobile ? '100dvh' : '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', background: 'transparent', boxSizing: 'border-box' }}>
 
       {/* Обертка, которая центрирует и кнопку, и окно */}
       <div style={{ width: '100%', maxWidth: 400, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -63,9 +74,25 @@ export function Lobby({ socket, setRoomId, username, onBack }: { socket: Socket,
           <h1 style={{ color: '#f0c674', fontSize: isMobile ? 28 : 36, marginBottom: 10, marginTop: 0 }}>Лобби</h1>
           <p style={{ color: 'white', marginBottom: isMobile ? 20 : 30, fontSize: isMobile ? 15 : undefined }}>Вы вошли как: <strong>{username}</strong></p>
 
-          <div style={{ marginBottom: isMobile ? 30 : 40 }}>
+          <div style={{ marginBottom: 16 }}>
             <button onClick={() => createRoom('1v1')} style={{ padding: isMobile ? '14px 20px' : '15px 20px', margin: isMobile ? '4px 0' : '5px 0', width: '100%', background: '#f0c674', border: 'none', borderRadius: 8, fontSize: isMobile ? 17 : 18, fontWeight: 'bold', cursor: 'pointer', color: '#000', minHeight: 48 }}>Создать 1 на 1</button>
             <button onClick={() => createRoom('2v2')} style={{ padding: isMobile ? '14px 20px' : '15px 20px', margin: isMobile ? '4px 0' : '5px 0', width: '100%', background: '#f0c674', border: 'none', borderRadius: 8, fontSize: isMobile ? 17 : 18, fontWeight: 'bold', cursor: 'pointer', color: '#000', minHeight: 48 }}>Создать 2 на 2</button>
+          </div>
+
+          <div style={{ display: 'grid', gap: 8, marginBottom: 18 }}>
+            <label htmlFor="bot-difficulty" style={{ color: '#f0c674' }}>Сложность бота</label>
+            <select id="bot-difficulty" value={difficulty} onChange={event => setDifficulty(event.target.value)} disabled={creatingBotRoom}
+              style={{ minHeight: 44, width: '100%', padding: '8px 12px', background: '#252540', color: 'white', border: '1px solid #777', borderRadius: 8, fontSize: 16 }}>
+              <option value="novice">Новичок</option>
+              <option value="amateur">Любитель</option>
+              <option value="professional">Профессионал</option>
+              <option value="master">Мастер</option>
+              <option value="legend">Легенда</option>
+            </select>
+            <button onClick={createBotRoom} disabled={creatingBotRoom}
+              style={{ width: '100%', minHeight: 48, padding: '12px 16px', background: '#f0c674', color: '#1a1a2e', border: 'none', borderRadius: 8, fontSize: 17, fontWeight: 'bold' }}>
+              {creatingBotRoom ? 'Запуск игры…' : 'Играть с ботом'}
+            </button>
           </div>
 
           <hr style={{ borderColor: '#444', marginBottom: 20 }} />
