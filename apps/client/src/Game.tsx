@@ -3,6 +3,22 @@ import { Socket } from 'socket.io-client';
 import { motion, LayoutGroup } from 'framer-motion';
 import { Goat3D } from './Goat3D';
 import { VoiceChat } from './VoiceChat';
+import { API_URL, apiFetch } from './api';
+
+type VisualPlace = 'opponents' | 'trick' | 'deck' | 'hand' | 'voice';
+type VisualMode = 'desktop' | 'mobile';
+type VisualPosition = { x:number; y:number };
+type VisualPart = {felt:string;edge:string;cardScale:number;positions:Record<VisualPlace,VisualPosition>};
+type VisualSettings = Record<VisualMode,VisualPart>;
+const newVisualPart = ():VisualPart => ({
+  felt:'#08714e',edge:'#d8ae60',cardScale:100,
+  positions:{opponents:{x:0,y:0},trick:{x:0,y:0},deck:{x:0,y:0},hand:{x:0,y:0},voice:{x:0,y:0}}
+});
+const newVisualSettings=():VisualSettings=>({desktop:newVisualPart(),mobile:newVisualPart()});
+const positionLabels:Record<VisualPlace,string>={
+  opponents:'Соперники',trick:'Карты на столе',deck:'Колода',hand:'Моя рука',voice:'Микрофон'
+};
+const clampVisual=(v:number)=>Math.min(35,Math.max(-35,Math.round(v)));
 
 const getAvatar = (name: string) => `https://api.dicebear.com/7.x/adventurer/svg?seed=${name || 'default'}`;
 
@@ -469,10 +485,95 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth <= 820);
   const [confirmExit, setConfirmExit] = useState(false);
   const [premiumSettingsOpen, setPremiumSettingsOpen] = useState(false);
+  const [visual, setVisual] = useState<VisualSettings>(() => newVisualSettings());
+  const [storedVisual, setStoredVisual] = useState<VisualSettings>(() => newVisualSettings());
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorMode, setEditorMode] = useState<VisualMode>(window.innerWidth<=820 ? 'mobile' : 'desktop');
+  const [visualStatus, setVisualStatus] = useState('');
+  const visualDrag = useRef<{key:VisualPlace;x:number;y:number;start:VisualPosition}|null>(null);
 
   const prevState = useRef<any>(null);
   const lastProcessedMsgId = useRef<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let mounted=true;
+    const refresh=async()=>{
+      try {
+        const response=await apiFetch(API_URL+'/api/table-visual');
+        if(!response.ok) return;
+        const settings=await response.json() as VisualSettings;
+        if(!mounted) return;
+        setStoredVisual(settings);
+        if(!editorOpen) setVisual(settings);
+      } catch { /* Offline game retains defaults. */ }
+    };
+    void refresh();
+    const update=(settings:VisualSettings)=>{
+      if(!mounted) return;
+      setStoredVisual(settings);
+      if(!editorOpen) setVisual(settings);
+    };
+    socket.on('table_visual_updated',update);
+    return ()=>{mounted=false;socket.off('table_visual_updated',update);};
+  },[socket,editorOpen]);
+
+  const changeVisual=(modify:(part:VisualPart)=>VisualPart)=>{
+    setVisual(prev=>({...prev,[editorMode]:modify(prev[editorMode])}));
+    setVisualStatus('Не сохранено');
+  };
+  const changePosition=(key:VisualPlace,value:VisualPosition)=>{
+    changeVisual(part=>({...part,positions:{...part.positions,[key]:value}}));
+  };
+  const closeEditor=()=>{
+    setVisual(storedVisual);setEditorOpen(false);setVisualStatus('');
+  };
+  const saveVisual=async()=>{
+    if(!isAdmin) return;
+    setVisualStatus('Сохраняем…');
+    try {
+      const response=await apiFetch(API_URL+'/api/table-visual',{
+        method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(visual)
+      });
+      const result=await response.json();
+      if(!response.ok) throw new Error(result.error || 'Ошибка сохранения');
+      setStoredVisual(result.settings);
+      setVisual(result.settings);
+      setVisualStatus('Сохранено для всех игроков');
+      setEditorOpen(false);
+    } catch(error) {setVisualStatus(error instanceof Error ? error.message : 'Ошибка сохранения');}
+  };
+  const activeVisual=visual[editorOpen?editorMode:(isMobile?'mobile':'desktop')];
+  const positionStyle=(key:VisualPlace):React.CSSProperties=>({
+    translate:String(activeVisual.positions[key].x*(isMobile?4:8))+'px '+String(activeVisual.positions[key].y*(isMobile?4:8))+'px'
+  });
+  const dragHandlers=(key:VisualPlace)=>({
+    onPointerDownCapture:(event:React.PointerEvent<HTMLDivElement>)=>{
+      if(!editorOpen||!isAdmin) return;
+      event.preventDefault();event.stopPropagation();
+      visualDrag.current={key,x:event.clientX,y:event.clientY,start:{...activeVisual.positions[key]}};
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    },
+    onPointerMove:(event:React.PointerEvent<HTMLDivElement>)=>{
+      const drag=visualDrag.current;
+      if(!editorOpen||!isAdmin||!drag||drag.key!==key) return;
+      const step=isMobile?4:8;
+      changePosition(key,{
+        x:clampVisual(drag.start.x+(event.clientX-drag.x)/step),
+        y:clampVisual(drag.start.y+(event.clientY-drag.y)/step)
+      });
+    },
+    onPointerUp:(event:React.PointerEvent<HTMLDivElement>)=>{
+      if(visualDrag.current?.key===key){
+        visualDrag.current=null;
+        event.currentTarget.releasePointerCapture?.(event.pointerId);
+      }
+    },
+    onPointerCancel:()=>{visualDrag.current=null;},
+    onClickCapture:(event:React.MouseEvent<HTMLDivElement>)=>{
+      if(editorOpen&&isAdmin){event.preventDefault();event.stopPropagation();}
+    }
+  });
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 820);
@@ -683,13 +784,14 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
 
   return (
     <LayoutGroup>
-      <div className="mobile-game premium-game" onClick={unlockGameAudio} style={{
+      <div className={editorOpen ? "mobile-game premium-game premium-editing" : "mobile-game premium-game"} onClick={unlockGameAudio} style={{
+        ...({"--visual-felt":activeVisual.felt,"--visual-edge":activeVisual.edge,"--visual-scale":activeVisual.cardScale / 100} as React.CSSProperties),
         display: 'flex', flexDirection: 'column', height: '100vh',
         background: '#101b32', position: 'relative', overflow: 'hidden',
         transform: isReversed ? 'rotate(180deg)' : 'none',
         transition: 'transform 0.6s ease-in-out',
       }}>
-        <div className="premium-voice-slot">{voiceChat}</div>
+        <div className="premium-voice-slot" style={{...({"--visual-voice-x":String(activeVisual.positions.voice.x*(isMobile?4:8))+"px","--visual-voice-y":String(activeVisual.positions.voice.y*(isMobile?4:8))+"px"} as React.CSSProperties)}}>{voiceChat}</div>
         <style>{floatingEmojiStyle}</style>
         {floatingEmojis.map(e => <div key={e.id} className="floating-emoji" style={{ left: `${e.left}%`, fontSize: isMobile ? 40 : 60 }}>{e.emoji}</div>)}
         {rainEmojis.map(e => <div key={e.id} className="rain-emoji" style={{ left: `${e.left}%`, animationDuration: `${e.duration}s`, fontSize: isMobile ? 30 : 50 }}>{e.emoji}</div>)}
@@ -763,6 +865,7 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
               <span className={timeLeft <= 5 ? 'premium-timer premium-timer--warning' : 'premium-timer'}>⏱ {timeLeft} с</span>
             </div>
             <div className="premium-topbar-actions">
+              {isDev && <button type="button" className="premium-icon-button" onClick={() => {setEditorMode(isMobile?"mobile":"desktop");setEditorOpen(v=>!v);setVisualStatus("");}} title="Конструктор стола" aria-label="Конструктор стола">🎨</button>}
               {isDev && openDevConsole && <button type="button" className="premium-icon-button" onClick={openDevConsole} title="Dev Console">🛠</button>}
               <button type="button" className="premium-icon-button" onClick={() => setPremiumSettingsOpen(v => !v)} title="Настройки стола" aria-label="Настройки стола" aria-expanded={premiumSettingsOpen}>⚙</button>
             </div>
@@ -776,7 +879,7 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
             </div>
           )}
           <main className="premium-felt">
-            <div className={'premium-other-players premium-other-players--' + gameState.mode}>
+            <div className={'premium-other-players premium-other-players--' + gameState.mode + (editorOpen ? ' premium-edit-target' : '')} style={positionStyle('opponents')} {...dragHandlers('opponents')}>
               {gameState.players.filter((p: any) => p.id !== gameState.me).map((p: any) => (
                 <div className={'premium-seat' + (p.side === gameState.players[gameState.me]?.side ? ' premium-seat--teammate' : '')} key={p.id}>
                   <div className={'premium-seat-name' + (p.id === gameState.currentPlayer ? ' premium-seat-name--turn' : '')}>
@@ -791,7 +894,7 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
             </div>
             <div className="premium-trump-label">Козырь: <strong>{gameState.trump || '—'}</strong></div>
             <div className="premium-table-zone">
-              <div className="premium-trick-playarea">
+              <div className={editorOpen ? 'premium-trick-playarea premium-edit-target' : 'premium-trick-playarea'} style={positionStyle('trick')} {...dragHandlers('trick')}>
                 {gameState.trick ? (
                   <>
                     <div className="premium-last-player">Ходил: {gameState.players[gameState.trick.attacker]?.name}</div>
@@ -805,7 +908,7 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
                   </>
                 ) : <span className="premium-waiting">Ожидание хода…</span>}
               </div>
-              <div className="premium-deck-zone">
+              <div className={editorOpen ? 'premium-deck-zone premium-edit-target' : 'premium-deck-zone'} style={positionStyle('deck')} {...dragHandlers('deck')}>
                 <div className="premium-deck-stack">
                   {gameState.deckCount > 0 && <div className="carpet-card-back premium-deck-card" />}
                   {gameState.trumpCard && <div className="premium-deck-trump"><CardView card={gameState.trumpCard} small /></div>}
@@ -818,7 +921,7 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
               <span>Бита А: {gameState.bitaCount?.A || 0}</span>
               <span>Бита Б: {gameState.bitaCount?.B || 0}</span>
             </div>
-            <div className="premium-hand-zone">
+            <div className={editorOpen ? 'premium-hand-zone premium-edit-target' : 'premium-hand-zone'} style={positionStyle('hand')} {...dragHandlers('hand')}>
               <div className="premium-hand" aria-label="Ваши карты">
                 {gameState.hand.map((card: any, index: number) => {
                   const selected = selectedCards.some(c => c.suit === card.suit && c.rank === card.rank);
@@ -861,6 +964,44 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
             </div>
           </footer>
           {errorMsg && <div className="premium-error" role="alert">{errorMsg}</div>}
+
+        {editorOpen && isAdmin && (
+          <aside className="premium-editor" aria-label="Конструктор игрового стола">
+            <div className="premium-editor-heading">
+              <strong>🎨 Конструктор стола</strong>
+              <button type="button" onClick={closeEditor} aria-label="Закрыть конструктор">✕</button>
+            </div>
+            <p>Перетаскивай выделенные блоки на столе или используй ползунки. До сохранения изменения видны только тебе.</p>
+            <div className="premium-editor-tabs">
+              <button type="button" className={editorMode==='desktop'?'chosen':''} onClick={()=>setEditorMode('desktop')}>Компьютер</button>
+              <button type="button" className={editorMode==='mobile'?'chosen':''} onClick={()=>setEditorMode('mobile')}>Телефон</button>
+            </div>
+            <label className="premium-editor-color">Цвет бархата <input type="color" value={activeVisual.felt} onChange={e=>changeVisual(part=>({...part,felt:e.target.value}))}/></label>
+            <label className="premium-editor-color">Окантовка <input type="color" value={activeVisual.edge} onChange={e=>changeVisual(part=>({...part,edge:e.target.value}))}/></label>
+            <label className="premium-editor-range">Размер карт: {activeVisual.cardScale}%
+              <input type="range" min="75" max="135" step="5" value={activeVisual.cardScale} onChange={e=>changeVisual(part=>({...part,cardScale:Number(e.target.value)}))}/>
+            </label>
+            <strong className="premium-editor-caption">Расположение элементов</strong>
+            {(['opponents','trick','deck','hand','voice'] as VisualPlace[]).map(key=>(
+              <div className="premium-editor-position" key={key}>
+                <strong>{positionLabels[key]}</strong>
+                <label>↔ {activeVisual.positions[key].x}
+                  <input type="range" min="-35" max="35" value={activeVisual.positions[key].x} onChange={e=>changePosition(key,{...activeVisual.positions[key],x:Number(e.target.value)})}/>
+                </label>
+                <label>↕ {activeVisual.positions[key].y}
+                  <input type="range" min="-35" max="35" value={activeVisual.positions[key].y} onChange={e=>changePosition(key,{...activeVisual.positions[key],y:Number(e.target.value)})}/>
+                </label>
+              </div>
+            ))}
+            <div className="premium-editor-controls">
+              <button type="button" onClick={()=>{setVisual(v=>({...v,[editorMode]:newVisualPart()}));setVisualStatus('Сброшено в предпросмотре')}}>Стандартный вид</button>
+              <button type="button" onClick={closeEditor}>Отмена</button>
+              <button className="premium-editor-save" type="button" onClick={()=>void saveVisual()}>Сохранить для всех</button>
+            </div>
+            {visualStatus && <div role="status" className="premium-editor-status">{visualStatus}</div>}
+          </aside>
+        )}
+
         </div>
       </div>
       {confirmExit && (
