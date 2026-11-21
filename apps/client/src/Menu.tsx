@@ -1,3 +1,4 @@
+import Rules from './Rules';
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { Socket } from 'socket.io-client';
 import { AdminPanel } from './AdminPanel';
@@ -43,6 +44,7 @@ const devStyles = `
 `;
 
 export function Menu({ socket, user, onPlay, onProfile, onFriends, onLogout, onResume, canResume }: { socket: Socket, user: any, onPlay: () => void, onProfile: () => void, onFriends: () => void, onLogout: () => void, onResume: () => void, canResume: boolean }) {
+  const [rulesOpen, setRulesOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [leadersOpen, setLeadersOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -199,10 +201,13 @@ export function Menu({ socket, user, onPlay, onProfile, onFriends, onLogout, onR
         <button className="kozel-menu-action" onClick={() => setLeadersOpen(true)} style={{ padding:12, width:'100%', background:'#252540', color:'#f0c674', border:'1px solid #f0c674', borderRadius:8, fontWeight:'bold', marginBottom:10, cursor:'pointer', minHeight:44 }}>🏆 Рейтинг игроков</button>
         {canResume && <button className="kozel-menu-action" onClick={onResume} style={{ padding: 14, width: '100%', background: '#f0c674', color: '#1a1a2e', border: 'none', borderRadius: 8, fontSize: 17, fontWeight: 'bold', cursor: 'pointer', marginBottom: 10, minHeight: 48 }}>↩ Вернуться в партию</button>}
         <button className="kozel-menu-action" onClick={onPlay} style={{ padding: isMobile ? '14px' : '15px', width: '100%', background: '#4caf50', color: 'white', border: 'none', borderRadius: 8, fontSize: isMobile ? 16 : 18, fontWeight: 'bold', cursor: 'pointer', marginBottom: 10, boxShadow: '0 4px 0 #2e7d32', minHeight: 48 }}>Играть</button>
+        <button className="kozel-menu-action" onClick={() => setRulesOpen(true)} style={{ padding: 12, width: '100%', background: '#113f31', color: '#f5d68b', border: '1px solid #dfbd72', borderRadius: 8, fontWeight: 'bold', marginBottom: 10, cursor: 'pointer', minHeight: 44 }}>Правила игры</button>
         <button className="kozel-menu-action" onClick={onFriends} style={{ padding: isMobile ? '14px' : '15px', width: '100%', background: '#0f3460', color: 'white', border: '1px solid #f0c674', borderRadius: 8, fontSize: isMobile ? 15 : 16, fontWeight: 'bold', cursor: 'pointer', marginBottom: 10, minHeight: 48 }}>👥 Друзья</button>
         <button className="kozel-menu-action" onClick={onProfile} style={{ padding: isMobile ? '14px' : '15px', width: '100%', background: 'transparent', color: '#aaa', border: '1px solid #555', borderRadius: 8, fontSize: isMobile ? 15 : 16, cursor: 'pointer', marginBottom: isMobile ? 10 : 15, minHeight: 48 }}>⚙️ Настройки</button>
         <button className="kozel-menu-action" onClick={onLogout} style={{ padding: isMobile ? '12px' : '10px', width: '100%', background: 'transparent', color: '#f44336', border: '1px solid #f44336', borderRadius: 8, fontSize: isMobile ? 14 : 14, cursor: 'pointer', minHeight: 44 }}>Выйти</button>
       </div>
+
+      {rulesOpen && <Rules onClose={() => setRulesOpen(false)} />}
 
       {isDev && (
         <button
