@@ -291,6 +291,28 @@ const CardView = memo(({ card, onClick, selected, small, faceDown, className, is
   );
 });
 
+// Each back represents one opponent card. Never use private hand data here.
+const OpponentCardBacks = memo(({ count, compact }: { count: number; compact: boolean }) => {
+  const total = Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0;
+  const overlap = compact ? 12 : 15;
+  const width = compact ? 25 : 31;
+  const height = compact ? 36 : 45;
+  return (
+    <div aria-label={`У игрока ${total} закрытых карт`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, maxWidth: '100%' }}>
+      <span style={{ color: '#c9c9c9', fontSize: compact ? 10 : 11 }}>{total} карт</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: height, maxWidth: '100%' }}>
+        {Array.from({ length: total }, (_, index) => (
+          <div key={index} className="carpet-card-back" aria-hidden="true" style={{
+            flex: '0 0 auto', width, height,
+            marginLeft: index === 0 ? 0 : -overlap,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.65)'
+          }} />
+        ))}
+      </div>
+    </div>
+  );
+});
+
 const DICE_ROLL_MS = 1500;
 const diceFaces = [
   { value: 1, x: 0, y: 0 },
@@ -701,7 +723,26 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
           </div>
         )}
 
-        {<div className="mobile-player-list" style={{display:'flex',flexWrap:'wrap',justifyContent:'center',gap:10,padding:8,background:'#252540',color:'white'}}>{gameState.players.map((p:any)=><span key={p.id} style={{color:p.id===gameState.currentPlayer?'#f0c674':'#ccc',border:'1px solid #555',borderRadius:8,padding:5}}>{p.side} · {p.name} · {p.handCount} карт{!p.connected?' · не в сети':''}{p.id===gameState.me?' · вы':''}</span>)}</div>}
+        <div className="mobile-player-list" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: isMobile ? 6 : 12, padding: isMobile ? 6 : 10, background: '#252540', color: 'white' }}>
+          {gameState.players.map((p: any) => (
+            <div key={p.id} style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              gap: 5, padding: isMobile ? '5px 7px' : '8px 12px', borderRadius: 8,
+              border: p.id === gameState.currentPlayer ? '1px solid #f0c674' : '1px solid #555',
+              background: p.id === gameState.me ? 'rgba(240,198,116,0.07)' : 'rgba(0,0,0,0.22)',
+              minWidth: isMobile ? 112 : 136, maxWidth: isMobile ? '46%' : 240, boxSizing: 'border-box'
+            }}>
+              <span style={{ color: p.id === gameState.currentPlayer ? '#f0c674' : '#ddd', fontSize: isMobile ? 11 : 13, textAlign: 'center', overflowWrap: 'anywhere' }}>
+                {p.side} · {p.name}{p.id === gameState.me ? ' · вы' : ''}{!p.connected ? ' · не в сети' : ''}
+              </span>
+              {p.id === gameState.me ? (
+                <span style={{ color: '#ccc', fontSize: isMobile ? 10 : 12 }}>Ваши карты: {gameState.hand.length}</span>
+              ) : (
+                <OpponentCardBacks count={p.handCount} compact={isMobile} />
+              )}
+            </div>
+          ))}
+        </div>
         <div className="felt-table" style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
           <div className="mobile-table-top" style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', padding: '20px 40px', alignItems: 'flex-start' }}>
             <div style={{ justifySelf: 'start', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
