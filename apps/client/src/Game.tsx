@@ -893,7 +893,7 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
 
         <div className="mobile-controls" style={{ background: '#1a1a2e', padding: '15px', borderTop: '2px solid #444', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           {errorMsg && <div style={{ background: '#d32f2f', padding: '10px', borderRadius: '8px', marginBottom: '15px', fontWeight: 'bold' }}>{errorMsg}</div>}
-          <Reorder.Group as="div" axis="x" values={handOrder} onReorder={setHandOrder} className="mobile-hand" style={{ display: 'flex', gap: '10px', flexWrap: 'nowrap', justifyContent: 'center', marginBottom: '15px', minHeight: '120px', maxWidth:'100%', touchAction:'pan-y' }} aria-label="Карты в руке. Удерживай и перетаскивай для изменения порядка.">
+          <Reorder.Group as="div" axis="x" values={handOrder} onReorder={setHandOrder} className="mobile-hand" style={{ display: 'flex', gap: isMobile ? 0 : 10, flexWrap: 'nowrap', justifyContent: 'center', marginBottom: '15px', minHeight: '120px', maxWidth:'100%', width:'100%', touchAction:'pan-y', overflow:'visible' }} aria-label="Карты в руке. Удерживай и перетаскивай для изменения порядка.">
             {(gameState.hand as any[]).slice().sort((a, b) => {
               const ai = handOrder.indexOf(String(a.rank) + '_' + String(a.suit));
               const bi = handOrder.indexOf(String(b.rank) + '_' + String(b.suit));
@@ -917,7 +917,14 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
                   initial={{ y: 100, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
                   transition={{ type: 'spring', stiffness: 180, damping: 25 }}
-                  style={{flex:'0 0 auto',listStyle:'none',position:'relative'}}
+                  style={(() => {
+                    // Keep card faces readable: overlap the hand instead of shrinking the cards.
+                    const n = gameState.hand.length;
+                    const width = isMobile ? Math.min(76, Math.max(56, window.innerWidth * 0.18)) : 90;
+                    const available = isMobile ? Math.max(240, window.innerWidth - 34) : Math.max(440, window.innerWidth - 100);
+                    const overlap = Math.max(0, Math.ceil((n * width - available) / Math.max(1, n - 1)));
+                    return {flex:'0 0 '+width+'px',width,marginLeft:index === 0 ? 0 : -overlap,listStyle:'none',position:'relative',zIndex:index+1};
+                  })()}
                 >
                   <CardView card={card} selected={isSelected} onClick={() => toggleCard(card)} isLegal={isLegal} />
                 </Reorder.Item>
