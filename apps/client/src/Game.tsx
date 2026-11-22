@@ -893,7 +893,7 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
 
         <div className="mobile-controls" style={{ background: '#1a1a2e', padding: '15px', borderTop: '2px solid #444', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           {errorMsg && <div style={{ background: '#d32f2f', padding: '10px', borderRadius: '8px', marginBottom: '15px', fontWeight: 'bold' }}>{errorMsg}</div>}
-          <Reorder.Group as="div" axis="x" values={handOrder} onReorder={setHandOrder} className="mobile-hand" style={{ display: 'flex', gap: isMobile ? 0 : 10, flexWrap: 'nowrap', justifyContent: 'center', marginBottom: '15px', minHeight: '120px', maxWidth:'100%', width:'100%', touchAction:'pan-y', overflow:'visible' }} aria-label="Карты в руке. Удерживай и перетаскивай для изменения порядка.">
+          <Reorder.Group as="div" axis="x" values={handOrder} onReorder={setHandOrder} layoutScroll className="mobile-hand" style={{ display: 'flex', gap: isMobile ? 5 : 10, flexWrap: 'nowrap', justifyContent: 'flex-start', marginBottom: '15px', minHeight: '120px', maxWidth:'100%', width:'100%', overflowX:'auto', overflowY:'hidden', paddingBottom: 16, touchAction:'pan-x' }} aria-label="Карты в руке. Можно пролистывать и перетаскивать для изменения порядка.">
             {(gameState.hand as any[]).slice().sort((a, b) => {
               const ai = handOrder.indexOf(String(a.rank) + '_' + String(a.suit));
               const bi = handOrder.indexOf(String(b.rank) + '_' + String(b.suit));
@@ -908,37 +908,33 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
                   value={cardStr}
                   key={cardStr}
                   className="kozel-hand-reorder"
-                  layoutId={cardStr}
+                  dragMomentum={false}
                   onDragStart={() => { handDragRef.current = true; }}
                   onDragEnd={() => { window.setTimeout(() => { handDragRef.current = false; }, 150); }}
                   onClickCapture={(event) => {
                     if (handDragRef.current) { event.preventDefault(); event.stopPropagation(); }
                   }}
-                  initial={{ y: 100, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ type: 'spring', stiffness: 180, damping: 25 }}
                   style={(() => {
                     // Keep card faces readable: overlap the hand instead of shrinking the cards.
-                    const n = gameState.hand.length;
                     const shortTouchLandscape = window.matchMedia('(pointer: coarse) and (orientation: landscape) and (max-height: 600px)').matches;
                     const compact = isMobile || shortTouchLandscape;
                     // Use real card-sized elements. Overlap instead of shrinking as the hand grows.
                     const width = shortTouchLandscape
                       ? Math.round(Math.min(86, Math.max(72, window.innerHeight * 0.19)))
                       : compact ? Math.round(Math.min(102, Math.max(84, window.innerWidth * 0.24))) : 108;
-                    const available = compact ? Math.max(220, window.innerWidth - 40) : Math.max(420, window.innerWidth - 110);
-                    const overlap = Math.max(0, Math.ceil((n * width - available) / Math.max(1, n - 1)));
+                    // Reorder requires non-overlapping hit boxes. Never use negative margins
+                    // here: they can make the bottom index of another card look like a suit mismatch.
                     return {
                       '--hand-card-width': width + 'px',
                       flex:'0 0 ' + width + 'px',
                       width,
                       minWidth:width,
-                      marginLeft:index === 0 ? 0 : -overlap,
-                      listStyle:'none',position:'relative',zIndex:index+1
+                      marginLeft:0,
+                      listStyle:'none',position:'relative',zIndex:1,background:'#fffdf6',borderRadius:6
                     } as React.CSSProperties;
                   })()}
                 >
-                  <CardView card={card} selected={isSelected} onClick={() => toggleCard(card)} isLegal={isLegal} />
+                  <CardView key={cardStr} card={card} selected={isSelected} onClick={() => toggleCard(card)} isLegal={isLegal} />
                 </Reorder.Item>
               );
             })}
