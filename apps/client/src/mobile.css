@@ -388,3 +388,28 @@
   .mobile-dice-grid:has(> :nth-child(2):last-child) { --dice-columns: 2; }
   .mobile-dice-screen h1, .mobile-dice-grid { margin-bottom: 8px !important; }
 }
+
+/* Card hand after reordering: legacy rules capped cards at 34–58px.
+   New larger sizes are defined per card, and a fan overlap keeps the row within the screen. */
+#root .mobile-game .mobile-hand > .kozel-hand-reorder {
+  box-sizing: border-box;
+  flex: 0 0 var(--hand-card-width, 96px) !important;
+  width: var(--hand-card-width, 96px) !important;
+  min-width: var(--hand-card-width, 96px) !important;
+  max-width: none !important;
+}
+#root .mobile-game .mobile-hand > .kozel-hand-reorder > .card-full {
+  display: block;
+  width: var(--hand-card-width, 96px) !important;
+  height: auto !important;
+  aspect-ratio: 2 / 3;
+  box-sizing: border-box;
+}
+@media (max-width: 820px), (pointer: coarse) and (max-height: 600px) {
+  #root .mobile-game .mobile-hand {
+    overflow: visible !important;
+    flex-wrap: nowrap !important;
+    justify-content: center !important;
+    gap: 0 !important;
+  }
+}
