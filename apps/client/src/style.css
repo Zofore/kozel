@@ -80,3 +80,18 @@ body {
 .animate-deal {
   animation: dealCard 0.5s cubic-bezier(0.25, 1, 0.5, 1) backwards;
 }
+/* Keep scrollbar functionality, hide only the distracting grey track. */
+html,body,#root,* {scrollbar-width:none;}
+html::-webkit-scrollbar,body::-webkit-scrollbar,#root::-webkit-scrollbar,
+*::-webkit-scrollbar {width:0 !important;height:0 !important;display:none !important;}
+.kozel-bot-picker {padding:14px;background:rgba(17,24,40,.7);border:1px solid #b99960;border-radius:14px;}
+.kozel-bot-picker-title {display:block;color:#f0c674;font-weight:800;margin-bottom:10px;text-align:center;}
+.kozel-bot-levels {display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:7px;}
+.kozel-bot-level {padding:10px 8px;min-height:47px;border-radius:9px;border:1px solid #67647a;background:#272842;color:white;font-weight:650;cursor:pointer;transition:background .15s,border-color .15s,box-shadow .15s;}
+.kozel-bot-level--active {background:linear-gradient(#f5d790,#d6a950);border-color:#ffe6a1;color:#151a2c;box-shadow:0 0 0 2px rgba(240,198,116,.3);font-weight:900;}
+.kozel-bot-level:focus-visible {outline:2px solid #f0c674;outline-offset:2px;}
+.kozel-menu-dealer-stage .goat-3d, .kozel-menu-dealer-stage .dealer,
+.kozel-menu-dealer-stage .croupier {filter:drop-shadow(0 12px 11px rgba(0,0,0,.45)) saturate(1.12);}
+/* Card order can be changed without affecting legal moves or server state. */
+.mobile-hand .kozel-hand-reorder {touch-action:pan-y;cursor:grab;user-select:none;}
+.mobile-hand .kozel-hand-reorder--dragging {cursor:grabbing;filter:drop-shadow(0 5px 13px rgba(240,198,116,.65));z-index:90;opacity:.85;}
