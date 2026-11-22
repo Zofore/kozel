@@ -201,55 +201,6 @@ async function main() {
 
   const io = new Server(app.server, { cors: { origin: origins }, maxHttpBufferSize: 64 * 1024, allowRequest: (req, cb) => cb(null, !req.headers.origin || origins.includes(req.headers.origin)) });
 
-
-  // Shared visual layout. Only an authenticated server-side administrator may publish.
-  const defaultVisualPart = () => ({
-    felt:'#08714e', edge:'#d8ae60', cardScale:100,
-    positions:{opponents:{x:0,y:0},trick:{x:0,y:0},deck:{x:0,y:0},hand:{x:0,y:0},voice:{x:0,y:0}}
-  });
-  const defaultVisual = () => ({desktop:defaultVisualPart(),mobile:defaultVisualPart()});
-  const normalizeVisual = (value:unknown) => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-    const object=value as Record<string,unknown>;
-    const parsePart = (part:unknown) => {
-      if(!part || typeof part !== 'object' || Array.isArray(part)) return null;
-      const p=part as Record<string,unknown>;
-      const color=(v:unknown):v is string=>typeof v==='string' && /^#[0-9a-fA-F]{6}$/.test(v);
-      if(!color(p.felt) || !color(p.edge) || typeof p.cardScale!=='number' || !Number.isFinite(p.cardScale) || p.cardScale<75 || p.cardScale>135) return null;
-      const pos=p.positions;
-      if(!pos || typeof pos!=='object' || Array.isArray(pos)) return null;
-      const coords:Record<string,{x:number;y:number}>={};
-      for(const key of ['opponents','trick','deck','hand','voice']){
-        const item=(pos as Record<string,unknown>)[key];
-        if(!item || typeof item!=='object' || Array.isArray(item)) return null;
-        const x=(item as any).x,y=(item as any).y;
-        if(typeof x!=='number' || typeof y!=='number' || !Number.isFinite(x) || !Number.isFinite(y) || x< -35 || x>35 || y< -35 || y>35) return null;
-        coords[key]={x,y};
-      }
-      return {felt:p.felt,edge:p.edge,cardScale:p.cardScale,positions:coords};
-    };
-    const desktop=parsePart(object.desktop),mobile=parsePart(object.mobile);
-    return desktop && mobile ? {desktop,mobile} : null;
-  };
-
-  app.get('/api/table-visual', async () => {
-    const stored=await db.getGameVisualSettings();
-    return normalizeVisual(stored) ?? defaultVisual();
-  });
-
-  app.post('/api/table-visual', async (req,reply) => {
-    const identity=(req as any).identity as {id:number;username:string};
-    if(!isAdminId(identity.id)) return reply.code(403).send({error:'Только администратор может изменять игровой стол'});
-    // Check the account is still valid, not just that its JWT remains signed.
-    const account=await db.getUser(identity.username);
-    if(!account || account.id!==identity.id) return reply.code(401).send({error:'Требуется авторизация'});
-    const settings=normalizeVisual(req.body);
-    if(!settings) return reply.code(400).send({error:'Некорректные настройки стола'});
-    await db.saveGameVisualSettings(settings);
-    io.emit('table_visual_updated',settings);
-    return {ok:true,settings};
-  });
-
   io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token;
     if (!token) return next(new Error('Требуется авторизация'));
