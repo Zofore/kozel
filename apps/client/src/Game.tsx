@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
 import { Socket } from 'socket.io-client';
-import { motion, LayoutGroup } from 'framer-motion';
+import { motion, LayoutGroup, Reorder } from 'framer-motion';
 import { Goat3D } from './Goat3D';
 import { VoiceChat } from './VoiceChat';
 
@@ -450,6 +450,26 @@ const DiceRollScreen = ({ gameState }: { gameState: any }) => {
 export function Game({ socket, roomId, onInterruption, username, isAdmin = false, openDevConsole, onExit, onRematch, onWaitingRoom }: { socket: Socket, roomId: string, onInterruption: () => void, onWaitingRoom: (roomId: string | null) => void, username: string, isAdmin?: boolean, openDevConsole?: () => void, onExit: () => void, onRematch?: (opponent: string) => void }) {
   const [gameState, setGameState] = useState<any>(null);
   const [selectedCards, setSelectedCards] = useState<any[]>([]);
+  const [handOrder, setHandOrder] = useState<string[]>([]);
+  const handDragRef = useRef(false);
+  const handSignature = (gameState?.hand || []).map((card: any) => String(card.rank) + '_' + String(card.suit)).sort().join('|');
+
+  // Preserve the player's chosen order. Shuffle only newly received cards.
+  useEffect(() => {
+    const cards: any[] = gameState?.hand || [];
+    const available = cards.map(card => String(card.rank) + '_' + String(card.suit));
+    setHandOrder(previous => {
+      const active = new Set(available);
+      const kept = previous.filter(id => active.has(id));
+      const newCards = available.filter(id => !kept.includes(id));
+      for (let i = newCards.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [newCards[i], newCards[j]] = [newCards[j], newCards[i]];
+      }
+      const next = [...kept, ...newCards];
+      return next.length === previous.length && next.every((id, i) => previous[i] === id) ? previous : next;
+    });
+  }, [handSignature]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [trumpAlert, setTrumpAlert] = useState<any>(null);
   const [timeLeft, setTimeLeft] = useState(30);
@@ -873,24 +893,37 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
 
         <div className="mobile-controls" style={{ background: '#1a1a2e', padding: '15px', borderTop: '2px solid #444', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           {errorMsg && <div style={{ background: '#d32f2f', padding: '10px', borderRadius: '8px', marginBottom: '15px', fontWeight: 'bold' }}>{errorMsg}</div>}
-          <div className="mobile-hand" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '15px', minHeight: '120px' }}>
-            {gameState.hand.map((card: any, index: number) => {
+          <Reorder.Group as="div" axis="x" values={handOrder} onReorder={setHandOrder} className="mobile-hand" style={{ display: 'flex', gap: '10px', flexWrap: 'nowrap', justifyContent: 'center', marginBottom: '15px', minHeight: '120px', maxWidth:'100%', touchAction:'pan-y' }} aria-label="Карты в руке. Удерживай и перетаскивай для изменения порядка.">
+            {(gameState.hand as any[]).slice().sort((a, b) => {
+              const ai = handOrder.indexOf(String(a.rank) + '_' + String(a.suit));
+              const bi = handOrder.indexOf(String(b.rank) + '_' + String(b.suit));
+              return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
+            }).map((card: any, index: number) => {
               const isSelected = selectedCards.some(c => c.suit === card.suit && c.rank === card.rank);
               const cardStr = `${card.rank}_${card.suit}`;
               const isLegal = gameState.legalMoves?.some((move: string[]) => move.includes(cardStr));
               return (
-                <motion.div 
-                  key={card.rank + card.suit} 
-                  layoutId={`${card.rank}_${card.suit}`}
-                  initial={{ y: 100, opacity: 0, rotate: 10 }}
-                  animate={{ y: 0, opacity: 1, rotate: 0 }}
-                  transition={{ type: 'spring', stiffness: 100, delay: index * 0.05 }}
+                <Reorder.Item
+                  as="div"
+                  value={cardStr}
+                  key={cardStr}
+                  className="kozel-hand-reorder"
+                  layoutId={cardStr}
+                  onDragStart={() => { handDragRef.current = true; }}
+                  onDragEnd={() => { window.setTimeout(() => { handDragRef.current = false; }, 150); }}
+                  onClickCapture={(event) => {
+                    if (handDragRef.current) { event.preventDefault(); event.stopPropagation(); }
+                  }}
+                  initial={{ y: 100, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ type: 'spring', stiffness: 180, damping: 25 }}
+                  style={{flex:'0 0 auto',listStyle:'none',position:'relative'}}
                 >
                   <CardView card={card} selected={isSelected} onClick={() => toggleCard(card)} isLegal={isLegal} />
-                </motion.div>
+                </Reorder.Item>
               );
             })}
-          </div>
+          </Reorder.Group>
           <div className="mobile-actions" style={{ display: 'flex', gap: isMobile ? 8 : 15, height: 'auto', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', padding: isMobile ? '5px 0' : 0 }}>
             {isMyTurn && !gameState.trick && legalSelection && (
               <button onClick={playCards} style={{ padding: isMobile ? '12px 20px' : '10px 30px', background: '#f0c674', border: 'none', borderRadius: '8px', fontSize: isMobile ? 16 : 18, fontWeight: 'bold', cursor: 'pointer', color: '#000', boxShadow: '0 4px 0 #b08d40', minWidth: isMobile ? 120 : 'auto', minHeight: 48 }}>{isMobile ? 'Ход' : 'Сделать ход'}</button>

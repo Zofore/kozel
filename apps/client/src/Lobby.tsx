@@ -215,15 +215,21 @@ export function Lobby({ socket, setRoomId, username, onBack }: { socket: Socket,
           </div>
 
           <div style={{ display: 'grid', gap: 8, marginBottom: 18 }}>
-            <label htmlFor="bot-difficulty" style={{ color: '#f0c674' }}>Сложность бота</label>
-            <select id="bot-difficulty" value={difficulty} onChange={event => setDifficulty(event.target.value)} disabled={creatingBotRoom}
-              style={{ minHeight: 44, width: '100%', padding: '8px 12px', background: '#252540', color: 'white', border: '1px solid #777', borderRadius: 8, fontSize: 16 }}>
-              <option value="novice">Новичок</option>
-              <option value="amateur">Любитель</option>
-              <option value="professional">Профессионал</option>
-              <option value="master">Мастер</option>
-              <option value="legend">Легенда</option>
-            </select>
+            <div className="kozel-bot-picker" role="group" aria-label="Сложность бота">
+              <span className="kozel-bot-picker-title">🤖 Выбери соперника</span>
+              <div className="kozel-bot-levels">
+                {[
+                  {id:'novice',label:'Новичок',icon:'🌱'},
+                  {id:'amateur',label:'Любитель',icon:'🎲'},
+                  {id:'professional',label:'Профессионал',icon:'♠'},
+                  {id:'master',label:'Мастер',icon:'👑'},
+                  {id:'legend',label:'Легенда',icon:'🏆'}
+                ].map(level=><button key={level.id} type="button" disabled={creatingBotRoom}
+                  aria-pressed={difficulty===level.id}
+                  className={'kozel-bot-level'+(difficulty===level.id?' kozel-bot-level--active':'')}
+                  onClick={()=>setDifficulty(level.id)}>{level.icon} {level.label}</button>)}
+              </div>
+            </div>
             <button onClick={createBotRoom} disabled={creatingBotRoom}
               style={{ width: '100%', minHeight: 48, padding: '12px 16px', background: '#f0c674', color: '#1a1a2e', border: 'none', borderRadius: 8, fontSize: 17, fontWeight: 'bold' }}>
               {creatingBotRoom ? 'Запуск игры…' : 'Играть с ботом'}

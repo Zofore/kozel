@@ -222,11 +222,11 @@ export function VoiceChat({ socket, roomId }: { socket: Socket; roomId: string }
       <button
         type="button"
         className="kozel-voice__mobile-toggle"
-        onClick={() => setMobileOpen(value => !value)}
+        onClick={() => {setMobileOpen(value => !value);setExpanded(true);}}
         aria-expanded={mobileOpen}
         aria-label={mobileOpen ? 'Свернуть голосовой чат' : 'Открыть голосовой чат'}
         title={mobileOpen ? 'Свернуть голосовой чат' : 'Голосовой чат'}
-      >{mobileOpen ? '✕' : (micOn ? '🎙' : '🎤')}</button>
+      >{mobileOpen ? '✕' : '🎤'}</button>
       <div className="kozel-voice__content">
       <div className="kozel-voice__bar">
         <span className="kozel-voice__title">🎙 Голос</span>

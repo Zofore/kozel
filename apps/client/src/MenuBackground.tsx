@@ -53,14 +53,34 @@ const stopMusic = () => {
 
 // --- КРУПЬЕ С СИГАРЕТОЙ (БЕЗ ИСКР) ---
 const Croupier = ({ color, side }: { color: string, side: 'left' | 'right' }) => (
-  <svg viewBox="0 0 200 400" style={{ width: '100%', height: '100%', filter: 'drop-shadow(0 0 20px rgba(240, 198, 116, 0.15))', transform: side === 'left' ? 'none' : 'scaleX(-1)' }}>
+  <svg viewBox="0 0 200 400" className="kozel-croupier-figure" style={{ width: '100%', height: '100%', filter: 'drop-shadow(0 7px 14px rgba(0,0,0,.45)) drop-shadow(0 0 16px rgba(240,198,116,.20))', transform: side === 'left' ? 'none' : 'scaleX(-1)' }}>
+    <defs>
+      <linearGradient id={'jacket-'+side} x1="0" x2="1" y1="0" y2="1">
+        <stop offset="0%" stopColor="#ffffff" stopOpacity=".26"/>
+        <stop offset="38%" stopColor={color}/>
+        <stop offset="76%" stopColor={color}/>
+        <stop offset="100%" stopColor="#050d13" stopOpacity=".62"/>
+      </linearGradient>
+      <radialGradient id={'face-'+side} cx=".42" cy=".28" r=".85">
+        <stop offset="0%" stopColor="#f6d3ac"/>
+        <stop offset="80%" stopColor="#d8a47b"/>
+        <stop offset="100%" stopColor="#9e694d"/>
+      </radialGradient>
+    </defs>
     <ellipse cx="100" cy="380" rx="70" ry="15" fill="rgba(0,0,0,0.5)" />
-    <path d="M40,140 C40,140 50,380 60,380 L140,380 C150,380 160,140 160,140 Z" fill={color} stroke="#f0c674" strokeWidth="3"/>
+    <path d="M40,140 C40,140 50,380 60,380 L140,380 C150,380 160,140 160,140 Z" fill={'url(#jacket-'+side+')'} stroke="#f0c674" strokeWidth="3"/>
     <path d="M70,140 L100,170 L130,140 L100,190 Z" fill="#ffffff" />
+    <path d="M60 153 L79 158 L97 185 L73 224 L62 193 M140 153 L121 158 L103 185 L127 224 L138 193" fill="none" stroke="#f0c674" strokeWidth="3" strokeLinecap="round" opacity=".8"/>
+    <path d="M61 265 Q100 276 139 265 M63 310 Q100 320 137 310" fill="none" stroke="#ffffff" strokeOpacity=".16" strokeWidth="2"/>
+    <circle cx="100" cy="227" r="4" fill="#efc45d" stroke="#9d672a" strokeWidth="1.2"/>
+    <circle cx="100" cy="261" r="4" fill="#efc45d" stroke="#9d672a" strokeWidth="1.2"/>
+    <circle cx="100" cy="295" r="4" fill="#efc45d" stroke="#9d672a" strokeWidth="1.2"/>
+    <path d="M132 183 L151 183 L151 212 L132 212 Z" fill="none" stroke="#f4d383" strokeWidth="2" opacity=".9"/>
+    <path d="M136 191 L146 191 M136 196 L146 196 M136 201 L144 201" stroke="#f4d383" strokeWidth="1.5" opacity=".8"/>
     <path d="M85,145 L100,155 L115,145 L100,165 Z" fill="#111" />
     <path d="M85,145 L95,150 L95,160 L85,155 Z" fill="#111" />
     <path d="M115,145 L105,150 L105,160 L115,155 Z" fill="#111" />
-    <circle cx="100" cy="90" r="45" fill="#e0b086" />
+    <circle cx="100" cy="90" r="45" fill={'url(#face-'+side+')'} />
     <path d="M 55 90 C 55 40, 145 40, 145 90 C 145 65, 130 50, 100 50 C 70 50, 55 65, 55 90 Z" fill="#22223b" />
     <circle cx="53" cy="95" r="8" fill="#e0b086" />
     <circle cx="147" cy="95" r="8" fill="#e0b086" />

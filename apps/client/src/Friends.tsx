@@ -209,11 +209,11 @@ export function Friends({ socket, user, onRoom, onBack, showToast, chatFriend, s
             <div style={{ fontSize: 12, color: '#aaa', marginTop: 2 }}>🏆 {f.wins || 0} / 💀 {f.losses || 0}</div>
           </div>
           <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            <button type="button" onClick={() => setChatFriend(f)} style={{ background: '#394670', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 5, cursor: 'pointer' }}>Написать</button>
+            <button type="button" onClick={() => setChatFriend(f)} title="Написать" aria-label={'Написать ' + f.username} style={{ background: '#394670', color: 'white', border: 'none', width: 40, height: 40, padding: 0, borderRadius: 5, cursor: 'pointer', fontSize: 23, display: 'inline-flex', alignItems:'center', justifyContent:'center' }}>☁</button>
             {f.online && (
               <button onClick={() => inviteFriend(f.username)} style={{ background: '#f0c674', color: '#000', border: 'none', padding: '8px 12px', borderRadius: 5, fontWeight: 'bold', cursor: 'pointer' }}>Пригласить</button>
             )}
-            <button onClick={() => setFriendToDelete(f.username)} style={{ background: '#f44336', color: 'white', border: 'none', padding: '8px 12px', borderRadius: 5, cursor: 'pointer', fontWeight: 'bold' }}>✖</button>
+            <button onClick={() => setFriendToDelete(f.username)} style={{ background: '#f44336', color: 'white', border: 'none', width: 40, height: 40, padding: 0, borderRadius: 5, cursor: 'pointer', fontWeight: 'bold' }}>✖</button>
           </div>
         </div>
       ))}
