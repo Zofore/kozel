@@ -796,7 +796,7 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
               minWidth: isMobile ? 112 : 136, maxWidth: isMobile ? '46%' : 240, boxSizing: 'border-box'
             }}>
               <span style={{ color: p.id === gameState.currentPlayer ? '#f0c674' : '#ddd', fontSize: isMobile ? 11 : 13, textAlign: 'center', overflowWrap: 'anywhere' }}>
-                {p.side} · {p.name}{p.id === gameState.me ? ' · вы' : ''}{!p.connected ? ' · не в сети' : ''}
+                {p.name}
               </span>
               {p.id === gameState.me ? (
                 <span style={{ color: '#ccc', fontSize: isMobile ? 10 : 12 }}>Ваши карты: {gameState.hand.length}</span>
