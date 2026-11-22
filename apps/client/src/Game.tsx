@@ -893,7 +893,7 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
 
         <div className="mobile-controls" style={{ background: '#1a1a2e', padding: '15px', borderTop: '2px solid #444', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           {errorMsg && <div style={{ background: '#d32f2f', padding: '10px', borderRadius: '8px', marginBottom: '15px', fontWeight: 'bold' }}>{errorMsg}</div>}
-          <Reorder.Group as="div" axis="x" values={handOrder} onReorder={setHandOrder} layoutScroll className="mobile-hand" style={{ display: 'flex', gap: isMobile ? 5 : 10, flexWrap: 'nowrap', justifyContent: 'flex-start', marginBottom: '15px', minHeight: '120px', maxWidth:'100%', width:'100%', overflowX:'auto', overflowY:'hidden', paddingBottom: 16, touchAction:'pan-x' }} aria-label="Карты в руке. Можно пролистывать и перетаскивать для изменения порядка.">
+          <Reorder.Group as="div" axis="x" values={handOrder} onReorder={setHandOrder} className="mobile-hand" style={{ display: 'flex', gap: isMobile ? 0 : 10, flexWrap: 'nowrap', justifyContent:'center', marginBottom:'15px', minHeight:'120px', maxWidth:'100%', width:'100%', overflow:'visible', paddingBottom: 16, touchAction:'none' }} aria-label="Все карты в руке. Перетаскивай для изменения порядка.">
             {(gameState.hand as any[]).slice().sort((a, b) => {
               const ai = handOrder.indexOf(String(a.rank) + '_' + String(a.suit));
               const bi = handOrder.indexOf(String(b.rank) + '_' + String(b.suit));
@@ -922,15 +922,23 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
                     const width = shortTouchLandscape
                       ? Math.round(Math.min(86, Math.max(72, window.innerHeight * 0.19)))
                       : compact ? Math.round(Math.min(102, Math.max(84, window.innerWidth * 0.24))) : 108;
-                    // Reorder requires non-overlapping hit boxes. Never use negative margins
-                    // here: they can make the bottom index of another card look like a suit mismatch.
+                    const count = gameState.hand.length;
+                    // Narrow layout slots, full-size card faces. The next card covers only
+                    // the right side of the previous one; each top-left rank/suit stays visible.
+                    // Separate keyed Reorder.Items guarantee identity through drag operations.
+                    const available = compact ? Math.max(270, window.innerWidth - 34) : Math.max(650, window.innerWidth - 110);
+                    const slot = compact && count > 1
+                      ? Math.max(28, Math.min(width, Math.floor((available - width) / (count - 1))))
+                      : width;
                     return {
                       '--hand-card-width': width + 'px',
-                      flex:'0 0 ' + width + 'px',
-                      width,
-                      minWidth:width,
+                      '--hand-slot-width': slot + 'px',
+                      flex:'0 0 ' + (index === count - 1 ? width : slot) + 'px',
+                      width:index === count - 1 ? width : slot,
+                      minWidth:0,
                       marginLeft:0,
-                      listStyle:'none',position:'relative',zIndex:1,background:'#fffdf6',borderRadius:6
+                      listStyle:'none',position:'relative',zIndex:index+1,
+                      borderRadius:6,
                     } as React.CSSProperties;
                   })()}
                 >
