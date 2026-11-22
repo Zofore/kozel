@@ -95,3 +95,9 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,#root::-webkit-scrollbar,
 /* Card order can be changed without affecting legal moves or server state. */
 .mobile-hand .kozel-hand-reorder {touch-action:pan-y;cursor:grab;user-select:none;}
 .mobile-hand .kozel-hand-reorder--dragging {cursor:grabbing;filter:drop-shadow(0 5px 13px rgba(240,198,116,.65));z-index:90;opacity:.85;}
+
+/* Refreshed animated casino hosts, with reduced-motion accessibility. */
+@keyframes dealerBreath {0%,100%{translate:0 0}50%{translate:0 -5px}}
+.croupier-left .kozel-croupier-figure,.croupier-right .kozel-croupier-figure{animation:dealerBreath 4.4s ease-in-out infinite;transform-origin:50% 90%;}
+.croupier-right .kozel-croupier-figure{animation-delay:-2.2s;}
+@media (prefers-reduced-motion:reduce){.croupier-left .kozel-croupier-figure,.croupier-right .kozel-croupier-figure{animation:none}}
