@@ -100,7 +100,7 @@ export function Menu({ socket, user, onPlay, onProfile, onFriends, onLogout, onR
   }, []);
 
   return (
-    <div className="mobile-screen kozel-main-menu" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100dvh', minHeight: '100dvh', maxHeight: '100dvh', overflow: 'hidden', background: 'transparent', color: 'white', position: 'relative', padding: '8px 12px', boxSizing: 'border-box' }}>
+    <div className="mobile-screen kozel-main-menu kozel-menu-dealer-stage" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100dvh', minHeight: '100dvh', maxHeight: '100dvh', overflow: 'hidden', background: 'transparent', color: 'white', position: 'relative', padding: '8px 12px', boxSizing: 'border-box' }}>
       
       <style>{devStyles + `
 /* The entire menu fits within the viewport; scrolling is intentionally disabled. */
@@ -171,7 +171,6 @@ export function Menu({ socket, user, onPlay, onProfile, onFriends, onLogout, onR
             {user.fullname}
           </span>
         </h2>
-        <p style={{ color: '#aaa', fontSize: isMobile ? 13 : 14, marginBottom: isMobile ? 3 : 5 }}>@{user.username}</p>
         <p style={{ color: '#4caf50', fontSize: isMobile ? 13 : 14, fontWeight: 'bold', marginBottom: isMobile ? 10 : 15 }}>{user.status || 'В сети'}</p>
 
         <div style={{ display: 'flex', justifyContent: 'center', gap: isMobile ? 10 : 15, marginBottom: isMobile ? 15 : 20, background: 'rgba(0,0,0,0.3)', padding: isMobile ? 8 : 10, borderRadius: 10 }}>
