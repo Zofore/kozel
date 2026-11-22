@@ -125,16 +125,17 @@ export function RadioPlayer({ suspended }: { suspended: boolean }) {
         onEnded={() => setPlaying(false)}
         onError={() => { setPlaying(false); if (selected.url) setError('Поток недоступен или не поддерживается браузером.'); }}
       />
-      {!suspended && <aside className="kozel-radio" aria-label="Радио">
+      {!suspended && <aside className={expanded ? 'kozel-radio kozel-radio--open' : 'kozel-radio'} aria-label="Радио">
+        <button type="button" className="kozel-radio__toggle" aria-label={expanded ? 'Свернуть радио' : 'Открыть радио'} title="Радио" aria-expanded={expanded} onClick={() => setExpanded(v => !v)}>{expanded ? '✕' : '📻'}</button>
+        {expanded && <div className="kozel-radio__panel">
         <div className="kozel-radio__bar">
           <span className="kozel-radio__label">📻 {selected.name}</span>
           <button type="button" className="kozel-radio__button" onClick={togglePlayback} aria-label={playing ? 'Остановить радио' : 'Включить радио'}>
             {playing ? 'Ⅱ' : '▶'}
           </button>
-          <button type="button" className="kozel-radio__button" onClick={() => setExpanded(current => !current)} aria-expanded={expanded} aria-label="Настройки радио">⚙</button>
+          <span aria-hidden="true" className="kozel-radio__gear">⚙</span>
         </div>
-        {expanded && (
-          <div className="kozel-radio__settings">
+        <div className="kozel-radio__settings">
             <label htmlFor="kozel-radio-station">Радиостанция</label>
             <select id="kozel-radio-station" value={stationId} onChange={event => setStationId(event.target.value)}>
               {stations.map(station => <option key={station.id} value={station.id}>{station.name}{station.url ? '' : ' — не подключена'}</option>)}
@@ -144,7 +145,7 @@ export function RadioPlayer({ suspended }: { suspended: boolean }) {
             {error && <div className="kozel-radio__error" role="status">{error}</div>}
             <div className="kozel-radio__hint">Радио доступно только до начала партии. Во время игры оно отключается.</div>
           </div>
-        )}
+        </div>}
       </aside>}
     </>
   );
