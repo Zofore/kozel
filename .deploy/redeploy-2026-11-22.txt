@@ -1,0 +1,3 @@
+Manual redeploy request for ONREZA, 2026-11-22.
+No application source or configuration changes.
+Triggered via GitHub to request a fresh deployment from main, if ONREZA auto-deploy is enabled.
