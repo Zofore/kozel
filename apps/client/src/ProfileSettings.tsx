@@ -8,6 +8,8 @@ export function ProfileSettings({ user, onSave, onBack }: { user: any, onSave: (
 
   const [imageError, setImageError] = useState('');
   const [processing, setProcessing] = useState(false);
+  const [showEmoji, setShowEmoji] = useState(false);
+  const emojiList = ['🙂','😊','😎','🔥','💪','🎮','🎉','❤️','🍀','🏆','👑','🤖','😴','☕','🎯'];
   const onAvatarFile = async (file?: File) => {
     if (!file) return;
     if (!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size > 8 * 1024 * 1024) {
@@ -44,21 +46,10 @@ export function ProfileSettings({ user, onSave, onBack }: { user: any, onSave: (
         </div>
 
         <label style={{ display:'block', marginBottom:12, padding:12, border:'1px solid #f0c674', borderRadius:8, color:'#f0c674', cursor:'pointer', fontWeight:700 }}>
-          📷 {processing ? 'Обрабатываем фото…' : 'Выбрать аватар из галереи'}
+          📷 {processing ? 'Обрабатываем фото…' : 'Выбрать аватар'}
           <input type="file" accept="image/jpeg,image/png,image/webp" disabled={processing} onChange={e => { void onAvatarFile(e.target.files?.[0]); e.target.value=''; }} style={{ display:'none' }}/>
         </label>
         {imageError && <p role="alert" style={{ color:'#ff8b8b', fontSize:13 }}>{imageError}</p>}
-        <div style={{ marginBottom: 15, textAlign: 'left' }}>
-          <label style={{ display: 'block', fontSize: 14, color: '#aaa', marginBottom: 5 }}>Ссылка на аватар (URL)</label>
-          <input 
-            type="text" 
-            value={avatar} 
-            onChange={e => setAvatar(e.target.value)} 
-            placeholder="Оставьте пустым для стандартного"
-            style={{ width: '100%', padding: '12px', borderRadius: 8, border: '1px solid #555', background: 'rgba(26, 26, 46, 0.8)', color: 'white', outline: 'none', boxSizing: 'border-box' }} 
-          />
-        </div>
-
         <div style={{ marginBottom: 25, textAlign: 'left' }}>
           <label style={{ display: 'block', fontSize: 14, color: '#aaa', marginBottom: 5 }}>Статус</label>
           <input 
@@ -68,6 +59,11 @@ export function ProfileSettings({ user, onSave, onBack }: { user: any, onSave: (
             placeholder="Ваш статус"
             style={{ width: '100%', padding: '12px', borderRadius: 8, border: '1px solid #555', background: 'rgba(26, 26, 46, 0.8)', color: 'white', outline: 'none', boxSizing: 'border-box' }} 
           />
+          <button type="button" onClick={() => setShowEmoji(v => !v)} aria-expanded={showEmoji}
+            style={{ marginTop:8, padding:'8px 12px', border:'1px solid #f0c674', borderRadius:8, background:'#252540', color:'#f0c674', cursor:'pointer' }}>😊 Добавить эмодзи</button>
+          {showEmoji && <div style={{display:'flex',flexWrap:'wrap',gap:5,marginTop:8}}>
+            {emojiList.map(e => <button key={e} type="button" onClick={() => {setStatus(v => (v + ' ' + e).slice(0,255));setShowEmoji(false);}} style={{border:'1px solid #555',borderRadius:6,background:'#303149',fontSize:21,padding:6,cursor:'pointer'}} aria-label={'Добавить '+e}>{e}</button>)}
+          </div>}
         </div>
 
         <button disabled={processing} onClick={() => onSave(status, avatar)} style={{ padding: '15px', width: '100%', background: '#4caf50', color: 'white', border: 'none', borderRadius: 8, fontSize: 16, fontWeight: 'bold', cursor: 'pointer', marginBottom: 10, boxShadow: '0 4px 0 #2e7d32' }}>Сохранить</button>
