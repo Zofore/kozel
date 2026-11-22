@@ -21,13 +21,6 @@ async function transaction<T>(fn: (client: PoolClient) => Promise<T>): Promise<T
 }
 export const db = {
   close: () => pool.end(),
-  async getGameVisualSettings(): Promise<unknown | null> {
-    const result = await pool.query('SELECT data FROM game_visual_settings WHERE id=1');
-    return result.rows[0]?.data ?? null;
-  },
-  async saveGameVisualSettings(data: object): Promise<void> {
-    await pool.query("INSERT INTO game_visual_settings(id,data) VALUES(1,$1::jsonb) ON CONFLICT (id) DO UPDATE SET data=EXCLUDED.data,updated_at=now()",[JSON.stringify(data)]);
-  },
   async init() {
     await transaction(async client => {
       await client.query('SELECT pg_advisory_xact_lock(7142031)');
@@ -43,7 +36,6 @@ export const db = {
       await client.query('ALTER TABLE users ALTER COLUMN rating SET DEFAULT 0');
       await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS xp INTEGER NOT NULL DEFAULT 0');
       await client.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS match_achievements TEXT[] NOT NULL DEFAULT '{}'");
-      await client.query("CREATE TABLE IF NOT EXISTS game_visual_settings (id SMALLINT PRIMARY KEY CHECK(id = 1), data JSONB NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT now())");
       await client.query('CREATE TABLE IF NOT EXISTS settled_matches (match_id TEXT PRIMARY KEY, created_at TIMESTAMPTZ NOT NULL DEFAULT now())');
       await client.query(`CREATE TABLE IF NOT EXISTS match_history (match_id TEXT NOT NULL REFERENCES settled_matches(match_id), username TEXT NOT NULL, won BOOLEAN NOT NULL, opponents JSONB NOT NULL DEFAULT '[]'::jsonb, finished_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (match_id, username))`);
       await client.query('CREATE INDEX IF NOT EXISTS match_history_user_date_idx ON match_history(username, finished_at DESC)');
