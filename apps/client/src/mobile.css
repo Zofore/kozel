@@ -413,3 +413,27 @@
     gap: 0 !important;
   }
 }
+
+/* Keep each draggable card distinct. No negative-margin fan: the drag
+   library requires independent hit boxes to preserve rank/suit identity. */
+#root .mobile-game .mobile-hand {
+  gap: 6px !important;
+  flex-wrap: nowrap !important;
+  justify-content: flex-start !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+#root .mobile-game .mobile-hand > .kozel-hand-reorder {
+  margin-left: 0 !important;
+  flex-shrink: 0 !important;
+  background: #fffdf6;
+  isolation: isolate;
+  border-radius: 6px;
+}
+#root .mobile-game .mobile-hand > .kozel-hand-reorder > .card-full {
+  opacity: 1;
+  background: #fffdf6 !important;
+}
