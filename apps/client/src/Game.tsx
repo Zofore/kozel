@@ -920,10 +920,22 @@ export function Game({ socket, roomId, onInterruption, username, isAdmin = false
                   style={(() => {
                     // Keep card faces readable: overlap the hand instead of shrinking the cards.
                     const n = gameState.hand.length;
-                    const width = isMobile ? Math.min(76, Math.max(56, window.innerWidth * 0.18)) : 90;
-                    const available = isMobile ? Math.max(240, window.innerWidth - 34) : Math.max(440, window.innerWidth - 100);
+                    const shortTouchLandscape = window.matchMedia('(pointer: coarse) and (orientation: landscape) and (max-height: 600px)').matches;
+                    const compact = isMobile || shortTouchLandscape;
+                    // Use real card-sized elements. Overlap instead of shrinking as the hand grows.
+                    const width = shortTouchLandscape
+                      ? Math.round(Math.min(86, Math.max(72, window.innerHeight * 0.19)))
+                      : compact ? Math.round(Math.min(102, Math.max(84, window.innerWidth * 0.24))) : 108;
+                    const available = compact ? Math.max(220, window.innerWidth - 40) : Math.max(420, window.innerWidth - 110);
                     const overlap = Math.max(0, Math.ceil((n * width - available) / Math.max(1, n - 1)));
-                    return {flex:'0 0 '+width+'px',width,marginLeft:index === 0 ? 0 : -overlap,listStyle:'none',position:'relative',zIndex:index+1};
+                    return {
+                      '--hand-card-width': width + 'px',
+                      flex:'0 0 ' + width + 'px',
+                      width,
+                      minWidth:width,
+                      marginLeft:index === 0 ? 0 : -overlap,
+                      listStyle:'none',position:'relative',zIndex:index+1
+                    } as React.CSSProperties;
                   })()}
                 >
                   <CardView card={card} selected={isSelected} onClick={() => toggleCard(card)} isLegal={isLegal} />
