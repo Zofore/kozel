@@ -101,3 +101,15 @@ html::-webkit-scrollbar,body::-webkit-scrollbar,#root::-webkit-scrollbar,
 .croupier-left .kozel-croupier-figure,.croupier-right .kozel-croupier-figure{animation:dealerBreath 4.4s ease-in-out infinite;transform-origin:50% 90%;}
 .croupier-right .kozel-croupier-figure{animation-delay:-2.2s;}
 @media (prefers-reduced-motion:reduce){.croupier-left .kozel-croupier-figure,.croupier-right .kozel-croupier-figure{animation:none}}
+
+/* Fixed hand-card widths for drag-and-drop: old responsive rules may not shrink them. */
+.mobile-game .mobile-hand > .kozel-hand-reorder {
+  flex-shrink:0 !important;
+  min-width:0;
+}
+.mobile-game .mobile-hand .kozel-hand-reorder .card-full {
+  width:100% !important;
+  height:auto !important;
+  aspect-ratio:2/3;
+  box-sizing:border-box;
+}
